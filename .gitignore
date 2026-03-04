@@ -1,0 +1,25 @@
+# Binary
+iaws
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+iaws.log
+
+# Test
+coverage.out
+
+# Env
+.env
+.env.*
