@@ -20,8 +20,5 @@ archives:
 
 # owner/name 未填时使用 GITHUB_REPOSITORY（当前仓库）
 release:
-  github:
-    owner: shidaxi
-    name: iaws
   draft: false
   # 若需适配任意仓库，可改为不填 owner/name，由 CI 环境自动识别
