@@ -691,6 +691,88 @@ func lambdaFuncListCmd(m *model, marker *string, more bool, filter string) tea.C
 	}
 }
 
+// --- Billing ---
+
+func billingMonthlyCostCmd(m *model) tea.Cmd {
+	return func() tea.Msg {
+		items, err := m.billingSvc.GetMonthlyCost(m.ctx, 6)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return billingCostMsg{
+			detail:    services.FormatMonthlyCostDetail(items),
+			backState: stateBillingMenu,
+		}
+	}
+}
+
+func billingServiceCostCmd(m *model) tea.Cmd {
+	return func() tea.Msg {
+		items, err := m.billingSvc.GetCostByService(m.ctx)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		maxSvc := 0
+		maxCost := 0
+		dollars := make([]string, len(items))
+		for i, item := range items {
+			dollars[i] = services.FmtDollar(item.Amount)
+			if len(item.Service) > maxSvc {
+				maxSvc = len(item.Service)
+			}
+			if len(dollars[i]) > maxCost {
+				maxCost = len(dollars[i])
+			}
+		}
+		entries := make([]listEntry, len(items))
+		for i, item := range items {
+			entries[i] = listEntry{
+				Title: fmt.Sprintf("%-*s  %-*s", maxSvc, item.Service, maxCost, dollars[i]),
+				ID:    item.Service,
+			}
+		}
+		return listLoadedMsg{items: entries, nextState: stateBillingServiceCost}
+	}
+}
+
+func billingServiceDetailCmd(m *model, serviceName string) tea.Cmd {
+	return func() tea.Msg {
+		items, err := m.billingSvc.GetServiceCostDetail(m.ctx, serviceName, 50)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return billingCostMsg{
+			detail:    services.FormatServiceDetailTable(serviceName, items),
+			backState: stateBillingServiceCost,
+		}
+	}
+}
+
+func billingDailyCostCmd(m *model) tea.Cmd {
+	return func() tea.Msg {
+		items, err := m.billingSvc.GetDailyCost(m.ctx, 30)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return billingCostMsg{
+			detail:    services.FormatDailyCostDetail(items),
+			backState: stateBillingMenu,
+		}
+	}
+}
+
+func (m *model) runBillingMenu(idx int) (tea.Model, tea.Cmd) {
+	switch idx {
+	case 0:
+		return m, billingMonthlyCostCmd(m)
+	case 1:
+		return m, billingServiceCostCmd(m)
+	case 2:
+		return m, billingDailyCostCmd(m)
+	}
+	return m, nil
+}
+
 // --- EC2 instance actions ---
 
 func (m *model) onEC2InstanceActionSelect(menuIdx int) (tea.Model, tea.Cmd) {

@@ -56,6 +56,10 @@ const (
 	stateKMSKeyList
 	stateCloudFrontDistList
 	stateLambdaFunctionList
+	stateBillingMenu
+	stateBillingMonthlyCost
+	stateBillingServiceCost
+	stateBillingDailyCost
 	stateConfirm
 	stateMessage // show error or success then back
 )
@@ -163,7 +167,8 @@ type Model struct {
 	rdsSvc    *services.RDSClient
 	kmsSvc    *services.KMSClient
 	cfSvc     *services.CloudFrontClient
-	lambdaSvc *services.LambdaClient
+	lambdaSvc  *services.LambdaClient
+	billingSvc *services.BillingClient
 }
 
 // model is an alias for backward compatibility in this package.
@@ -221,6 +226,9 @@ func (m *model) ensureClients() {
 	if m.lambdaSvc == nil {
 		m.lambdaSvc = services.NewLambda(cfg)
 	}
+	if m.billingSvc == nil {
+		m.billingSvc = services.NewBilling(cfg)
+	}
 }
 
 func mainMenuItems() []string {
@@ -228,7 +236,7 @@ func mainMenuItems() []string {
 		"EC2", "SSM", "Secrets Manager", "S3",
 		"ACM", "Route53", "EKS", "ECR",
 		"ELB", "IAM", "RDS", "KMS",
-		"CloudFront", "Lambda", "Quit",
+		"CloudFront", "Lambda", "Billing", "Quit",
 	}
 }
 
@@ -288,7 +296,7 @@ func (m *model) filteredItems() []listEntry {
 
 func (m *model) isRemoteSearchState() bool {
 	switch m.kind {
-	case stateProfile, stateRegion:
+	case stateProfile, stateRegion, stateBillingServiceCost:
 		return false
 	}
 	return m.isListState()

@@ -132,6 +132,11 @@ type lambdaListLoadedMsg struct {
 	detailMap map[string]string
 }
 
+type billingCostMsg struct {
+	detail    string
+	backState stateKind
+}
+
 // route53 record sets pagination needs two tokens
 type r53RecordsMsg struct {
 	items         []listEntry

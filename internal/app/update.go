@@ -180,7 +180,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.aws.Config.Region = m.region
 		m.ec2, m.ssm, m.secrets, m.s3, m.acm, m.r53 = nil, nil, nil, nil, nil, nil
 		m.eksSvc, m.ecrSvc, m.elbSvc, m.iamSvc = nil, nil, nil, nil
-		m.rdsSvc, m.kmsSvc, m.cfSvc, m.lambdaSvc = nil, nil, nil, nil
+		m.rdsSvc, m.kmsSvc, m.cfSvc, m.lambdaSvc, m.billingSvc = nil, nil, nil, nil, nil
 		m.ensureClients()
 		m.savedRegionItems = m.items
 		m.kind = stateMainMenu
@@ -494,6 +494,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case billingCostMsg:
+		m.msgText = msg.detail
+		m.msgErr = false
+		m.prevStateAfterMessage = msg.backState
+		m.kind = stateMessage
+		return m, nil
+
 	case errMsg:
 		m.searching = false
 		ilog.Error("TUI error: %v", msg.err)
@@ -618,7 +625,8 @@ func (m *model) isListState() bool {
 		stateACMCertList, stateRoute53ZoneList, stateRoute53RecordList,
 		stateEKSClusterList, stateECRRepoList, stateECRImageList, stateELBList,
 		stateIAMUserList, stateIAMRoleList, stateIAMPolicyList,
-		stateRDSInstanceList, stateKMSKeyList, stateCloudFrontDistList, stateLambdaFunctionList:
+		stateRDSInstanceList, stateKMSKeyList, stateCloudFrontDistList, stateLambdaFunctionList,
+		stateBillingServiceCost:
 		return true
 	}
 	return false
@@ -627,7 +635,7 @@ func (m *model) isListState() bool {
 func (m *model) isMenuState() bool {
 	switch m.kind {
 	case stateMainMenu, stateEC2Menu, stateEC2InstanceAction, stateSSMMenu, stateSecretsMenu, stateS3Menu,
-		stateACMMenu, stateRoute53Menu, stateIAMMenu:
+		stateACMMenu, stateRoute53Menu, stateIAMMenu, stateBillingMenu:
 		return true
 	}
 	return false
@@ -706,7 +714,12 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			m.resetPage()
 			m.detailMap = nil
 			return m, lambdaFuncListCmd(m, nil, false, "")
-		case 14:
+		case 14: // Billing
+			m.kind = stateBillingMenu
+			m.menuItems = []string{"Monthly cost (6 months)", "Cost by service (this month)", "Daily cost (30 days)", "Back"}
+			m.menuSelected = 0
+			return m, nil
+		case 15:
 			return m, tea.Quit
 		}
 		return m, nil
@@ -750,6 +763,11 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			return m.handleBack()
 		}
 		return m.runIAMMenu(idx)
+	case stateBillingMenu:
+		if idx == 3 {
+			return m.handleBack()
+		}
+		return m.runBillingMenu(idx)
 	}
 	return m, nil
 }
@@ -867,6 +885,8 @@ func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 			m.kind = stateMessage
 		}
 		return m, nil
+	case stateBillingServiceCost:
+		return m, billingServiceDetailCmd(m, entry.ID)
 	}
 	return m, nil
 }

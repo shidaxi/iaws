@@ -131,10 +131,17 @@ func (m *model) handleBack() (tea.Model, tea.Cmd) {
 		m.items = nil
 		m.selected = 0
 		return m, nil
-	case stateACMMenu, stateRoute53Menu, stateIAMMenu:
+	case stateACMMenu, stateRoute53Menu, stateIAMMenu, stateBillingMenu:
 		m.kind = stateMainMenu
 		m.menuItems = mainMenuItems()
 		m.menuSelected = 0
+		return m, nil
+	case stateBillingServiceCost:
+		m.kind = stateBillingMenu
+		m.menuItems = []string{"Monthly cost (6 months)", "Cost by service (this month)", "Daily cost (30 days)", "Back"}
+		m.menuSelected = 0
+		m.items = nil
+		m.filter = ""
 		return m, nil
 	case stateACMCertList, stateACMCertDetail:
 		m.kind = stateACMMenu

@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -108,6 +109,11 @@ func (m *model) View() string {
 		return m.viewList("CloudFront Distributions", m.searchSubtitle())
 	case stateLambdaFunctionList:
 		return m.viewList("Lambda Functions", m.searchSubtitle())
+	case stateBillingMenu:
+		return m.viewMenu("Billing (Cost Explorer)", "")
+	case stateBillingServiceCost:
+		now := time.Now().UTC()
+		return m.viewList("Cost by Service ("+now.Format("2006-01")+")", "filter: "+m.filter)
 	case stateS3PutObject:
 		return m.viewS3PutInput()
 	case stateConfirm:
