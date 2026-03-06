@@ -1,18 +1,48 @@
 package app
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbletea"
 )
 
+// handleListKey handles keys when NOT in filter mode:
+// / = enter filter mode, tab = cycle column, s = toggle sort,
+// up/down/enter/esc = navigation.
 func (m *model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "/":
+		m.filterMode = true
+		return m, nil
+	case "tab":
+		cols := m.getTableColumns()
+		if len(cols) > 0 {
+			if m.sortColIdx < 0 {
+				m.sortColIdx = 0
+			} else {
+				m.sortColIdx = (m.sortColIdx + 1) % len(cols)
+			}
+			m.sortDesc = true
+		}
+		return m, nil
+	case "s":
+		cols := m.getTableColumns()
+		if len(cols) > 0 {
+			if m.sortColIdx < 0 {
+				m.sortColIdx = 0
+			}
+			m.sortDesc = !m.sortDesc
+			m.sorted = true
+			m.sortItemsByColumn()
+		}
+		return m, nil
 	case "up", "k":
 		if m.selected > 0 {
 			m.selected--
 		}
 		return m, nil
 	case "down", "j":
-		items := m.filteredItems()
+		items := m.visibleItems()
 		if m.selected < len(items)-1 {
 			m.selected++
 		}
@@ -20,7 +50,77 @@ func (m *model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.handleListEnter()
 	case "esc":
+		if m.filter != "" {
+			m.filter = ""
+			m.selected = 0
+			if m.isRemoteSearchState() {
+				m.searchPending = false
+				m.searching = true
+				m.pageToken = ""
+				m.hasMore = false
+				return m, m.triggerSearchCmd()
+			}
+			return m, nil
+		}
 		return m.handleBack()
+	}
+	return m, nil
+}
+
+// handleFilterModeKey handles keys when in filter mode:
+// typing updates filter, Enter exits, Esc clears + exits.
+func (m *model) handleFilterModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.String() == "enter":
+		m.filterMode = false
+		if m.isRemoteSearchState() && m.searchPending {
+			m.searchPending = false
+			m.searching = true
+			m.pageToken = ""
+			m.hasMore = false
+			return m, m.triggerSearchCmd()
+		}
+		return m, nil
+	case msg.String() == "esc":
+		m.filterMode = false
+		if m.filter != "" {
+			m.filter = ""
+			m.selected = 0
+			if m.isRemoteSearchState() {
+				m.searchPending = false
+				m.searching = true
+				m.pageToken = ""
+				m.hasMore = false
+				return m, m.triggerSearchCmd()
+			}
+		}
+		return m, nil
+	case msg.String() == "backspace" || (len(msg.Runes) == 1 && (msg.Runes[0] == 8 || msg.Runes[0] == 127)):
+		if len(m.filter) > 0 {
+			m.filter = m.filter[:len(m.filter)-1]
+			m.selected = 0
+			if m.isRemoteSearchState() {
+				m.searchPending = true
+				m.searchSeq++
+				seq := m.searchSeq
+				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+					return searchTickMsg{seq: seq}
+				})
+			}
+		}
+		return m, nil
+	case len(msg.Runes) == 1 && msg.Runes[0] >= 32 && msg.Runes[0] < 127:
+		m.filter += string(msg.Runes[0])
+		m.selected = 0
+		if m.isRemoteSearchState() {
+			m.searchPending = true
+			m.searchSeq++
+			seq := m.searchSeq
+			return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+				return searchTickMsg{seq: seq}
+			})
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -59,6 +159,8 @@ func (m *model) handleMenuKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleBack() (tea.Model, tea.Cmd) {
+	m.resetSort()
+	m.filterMode = false
 	switch m.kind {
 	case stateProfile:
 		return m, tea.Quit
@@ -79,7 +181,7 @@ func (m *model) handleBack() (tea.Model, tea.Cmd) {
 		m.menuItems = mainMenuItems()
 		m.menuSelected = 0
 		return m, nil
-	case stateEC2InstanceList, stateEC2VPCList, stateEC2SubnetList, stateEC2SGList, stateEC2KeyList, stateEC2VolumeList, stateEC2AMIList:
+	case stateEC2InstanceList, stateEC2VPCList, stateEC2SubnetList, stateEC2SGList, stateEC2KeyList, stateEC2VolumeList, stateEC2SnapshotList, stateEC2AMIList:
 		m.kind = stateEC2Menu
 		m.menuSelected = 0
 		m.items = nil
@@ -136,12 +238,13 @@ func (m *model) handleBack() (tea.Model, tea.Cmd) {
 		m.menuItems = mainMenuItems()
 		m.menuSelected = 0
 		return m, nil
-	case stateBillingServiceCost:
+	case stateBillingServiceCost, stateBillingTopResources:
 		m.kind = stateBillingMenu
-		m.menuItems = []string{"Monthly cost (6 months)", "Cost by service (this month)", "Daily cost (30 days)", "Back"}
+		m.menuItems = billingMenuItems()
 		m.menuSelected = 0
 		m.items = nil
 		m.filter = ""
+		m.detailMap = nil
 		return m, nil
 	case stateACMCertList, stateACMCertDetail:
 		m.kind = stateACMMenu

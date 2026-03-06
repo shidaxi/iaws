@@ -222,6 +222,52 @@ func (c *EC2Client) ListVolumes(ctx context.Context) ([]VolumeItem, error) {
 	return items, nil
 }
 
+// SnapshotItem for list display.
+type SnapshotItem struct {
+	ID          string
+	VolumeID    string
+	Size        int32
+	State       string
+	Description string
+	StartTime   string
+}
+
+func (c *EC2Client) ListSnapshots(ctx context.Context) ([]SnapshotItem, error) {
+	ilog.Info("EC2: ListSnapshots (owner=self)")
+	out, err := c.client.DescribeSnapshots(ctx, &ec2.DescribeSnapshotsInput{
+		OwnerIds: []string{"self"},
+	})
+	if err != nil {
+		ilog.Error("EC2: ListSnapshots failed: %v", err)
+		return nil, err
+	}
+	var items []SnapshotItem
+	for _, s := range out.Snapshots {
+		size := int32(0)
+		if s.VolumeSize != nil {
+			size = *s.VolumeSize
+		}
+		startTime := ""
+		if s.StartTime != nil {
+			startTime = s.StartTime.Format("2006-01-02 15:04")
+		}
+		desc := aws.ToString(s.Description)
+		if len(desc) > 40 {
+			desc = desc[:37] + "..."
+		}
+		items = append(items, SnapshotItem{
+			ID:          aws.ToString(s.SnapshotId),
+			VolumeID:    aws.ToString(s.VolumeId),
+			Size:        size,
+			State:       string(s.State),
+			Description: desc,
+			StartTime:   startTime,
+		})
+	}
+	ilog.Info("EC2: ListSnapshots returned %d items", len(items))
+	return items, nil
+}
+
 // AMIItem for list display.
 type AMIItem struct {
 	ID   string

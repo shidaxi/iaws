@@ -128,7 +128,7 @@ func ec2VolumesCmd(m *model, filter string) tea.Cmd {
 		var entries []listEntry
 		var vols []services.VolumeItem
 		for _, v := range items {
-			title := fmt.Sprintf("%-24s %-10s %s", v.ID, fmt.Sprintf("%dGiB", v.Size), v.State)
+			title := fmt.Sprintf("%-24s %-8s %-10s %s", v.ID, v.Type, fmt.Sprintf("%dGiB", v.Size), v.State)
 			if filter != "" && !containsCI(title, filter) {
 				continue
 			}
@@ -136,6 +136,26 @@ func ec2VolumesCmd(m *model, filter string) tea.Cmd {
 			vols = append(vols, v)
 		}
 		return volumeListLoadedMsg{items: entries, volumes: vols}
+	}
+}
+
+func ec2SnapshotsCmd(m *model, filter string) tea.Cmd {
+	return func() tea.Msg {
+		items, err := m.ec2.ListSnapshots(m.ctx)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		var entries []listEntry
+		var snaps []services.SnapshotItem
+		for _, s := range items {
+			title := fmt.Sprintf("%-24s %-24s %-10s %-12s %s", s.ID, s.VolumeID, fmt.Sprintf("%dGiB", s.Size), s.State, s.StartTime)
+			if filter != "" && !containsCI(title, filter) {
+				continue
+			}
+			entries = append(entries, listEntry{Title: title, ID: s.ID})
+			snaps = append(snaps, s)
+		}
+		return snapshotListLoadedMsg{items: entries, snapshots: snaps}
 	}
 }
 
@@ -173,6 +193,8 @@ func (m *model) runEC2Menu(idx int) (tea.Model, tea.Cmd) {
 	case 5:
 		return m, ec2VolumesCmd(m, "")
 	case 6:
+		return m, ec2SnapshotsCmd(m, "")
+	case 7:
 		return m, ec2AMIsCmd(m, "")
 	}
 	return m, nil
@@ -727,11 +749,12 @@ func billingServiceCostCmd(m *model) tea.Cmd {
 		entries := make([]listEntry, len(items))
 		for i, item := range items {
 			entries[i] = listEntry{
-				Title: fmt.Sprintf("%-*s  %-*s", maxSvc, item.Service, maxCost, dollars[i]),
+				Title: fmt.Sprintf("%-*s %-*s", maxSvc, item.Service, maxCost, dollars[i]),
 				ID:    item.Service,
 			}
 		}
-		return listLoadedMsg{items: entries, nextState: stateBillingServiceCost}
+		cols := []columnDef{{"Service", maxSvc}, {"Cost", -1}}
+		return listLoadedMsg{items: entries, nextState: stateBillingServiceCost, columns: cols}
 	}
 }
 
@@ -761,6 +784,83 @@ func billingDailyCostCmd(m *model) tea.Cmd {
 	}
 }
 
+func billingTopResourcesCmd(m *model) tea.Cmd {
+	return func() tea.Msg {
+		items, err := m.billingSvc.GetTopResources(m.ctx, 50)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		if len(items) == 0 {
+			return billingCostMsg{
+				detail:    "No resource-level cost data available.\nResource-level data may need to be enabled in your AWS Cost Explorer settings.",
+				backState: stateBillingMenu,
+			}
+		}
+
+		maxRes := len("Resource")
+		maxSvc := len("Service")
+		maxCost := len("Cost")
+		resIDs := make([]string, len(items))
+		svcs := make([]string, len(items))
+		dollars := make([]string, len(items))
+		dm := make(map[string]string, len(items))
+		for i, item := range items {
+			resIDs[i] = item.ResourceID
+			if len(resIDs[i]) > 48 {
+				resIDs[i] = resIDs[i][:45] + "..."
+			}
+			svcs[i] = services.ShortenService(item.Service)
+			dollars[i] = fmt.Sprintf("$%.2f", item.Amount)
+			if len(resIDs[i]) > maxRes {
+				maxRes = len(resIDs[i])
+			}
+			if len(svcs[i]) > maxSvc {
+				maxSvc = len(svcs[i])
+			}
+			if len(dollars[i]) > maxCost {
+				maxCost = len(dollars[i])
+			}
+			dm[item.ResourceID] = fmt.Sprintf("Resource:  %s\nService:   %s\nCost:      %s", item.ResourceID, item.Service, dollars[i])
+		}
+		entries := make([]listEntry, len(items))
+		for i, item := range items {
+			entries[i] = listEntry{
+				Title: fmt.Sprintf("%-*s %-*s %-*s", maxRes, resIDs[i], maxSvc, svcs[i], maxCost, dollars[i]),
+				ID:    item.ResourceID,
+			}
+		}
+		cols := []columnDef{{"Resource", maxRes}, {"Service", maxSvc}, {"Cost", -1}}
+		return billingResourceListMsg{items: entries, detailMap: dm, columns: cols}
+	}
+}
+
+func billingOptimizationCmd(m *model) tea.Cmd {
+	return func() tea.Msg {
+		monthly, err := m.billingSvc.GetMonthlyCost(m.ctx, 6)
+		if err != nil {
+			return errMsg{err: err}
+		}
+
+		rightsizing, rsErr := m.billingSvc.GetRightsizingRecommendations(m.ctx)
+		if rsErr != nil {
+			ilog.Info("Billing: rightsizing unavailable: %v", rsErr)
+			rightsizing = nil
+		}
+
+		topRes, trErr := m.billingSvc.GetTopResources(m.ctx, 50)
+		if trErr != nil {
+			ilog.Info("Billing: top resources unavailable: %v", trErr)
+			topRes = nil
+		}
+
+		report := services.FormatOptimizationReport(monthly, rightsizing, topRes)
+		return billingCostMsg{
+			detail:    report,
+			backState: stateBillingMenu,
+		}
+	}
+}
+
 func (m *model) runBillingMenu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
@@ -769,6 +869,10 @@ func (m *model) runBillingMenu(idx int) (tea.Model, tea.Cmd) {
 		return m, billingServiceCostCmd(m)
 	case 2:
 		return m, billingDailyCostCmd(m)
+	case 3:
+		return m, billingTopResourcesCmd(m)
+	case 4:
+		return m, billingOptimizationCmd(m)
 	}
 	return m, nil
 }
@@ -908,6 +1012,8 @@ func (m *model) triggerSearchCmd() tea.Cmd {
 		return ec2KeyPairsCmd(m, filter)
 	case stateEC2VolumeList:
 		return ec2VolumesCmd(m, filter)
+	case stateEC2SnapshotList:
+		return ec2SnapshotsCmd(m, filter)
 	case stateEC2AMIList:
 		return ec2AMIsCmd(m, filter)
 	case stateSSMParamList:

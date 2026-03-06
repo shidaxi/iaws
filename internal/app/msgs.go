@@ -38,6 +38,7 @@ type pagedInstancesMsg struct {
 type listLoadedMsg struct {
 	items     []listEntry
 	nextState stateKind
+	columns   []columnDef
 }
 
 type ec2InstancesLoadedMsg struct {
@@ -91,6 +92,11 @@ type volumeListLoadedMsg struct {
 	volumes []services.VolumeItem
 }
 
+type snapshotListLoadedMsg struct {
+	items     []listEntry
+	snapshots []services.SnapshotItem
+}
+
 type detailLoadedMsg struct {
 	detail    string
 	backState stateKind
@@ -135,6 +141,12 @@ type lambdaListLoadedMsg struct {
 type billingCostMsg struct {
 	detail    string
 	backState stateKind
+}
+
+type billingResourceListMsg struct {
+	items     []listEntry
+	detailMap map[string]string
+	columns   []columnDef
 }
 
 // route53 record sets pagination needs two tokens

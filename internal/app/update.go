@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/shidaxi/iaws/internal/config"
@@ -29,28 +28,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		if m.kind != stateConfirm && m.kind != stateMessage {
-			if m.isListState() {
-				if m.isRemoteSearchState() {
-					return m.handleRemoteSearchKey(msg)
-				}
-				// local filter for profile/region
-				if msg.String() == "backspace" || (len(msg.Runes) == 1 && (msg.Runes[0] == 8 || msg.Runes[0] == 127)) {
-					if len(m.filter) > 0 {
-						m.filter = m.filter[:len(m.filter)-1]
-						m.selected = 0
-					}
-					return m, nil
-				}
-				if len(msg.Runes) == 1 {
-					r := msg.Runes[0]
-					if r >= 32 && r < 127 {
-						m.filter += string(r)
-						m.selected = 0
-						return m, nil
-					}
-				}
+		// List states: dispatch to filter-mode or normal key handler
+		if m.isListState() {
+			if m.filterMode {
+				return m.handleFilterModeKey(msg)
 			}
+			return m.handleListKey(msg)
 		}
 
 		switch m.kind {
@@ -130,9 +113,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.isListState() {
-			return m.handleListKey(msg)
-		}
 		if m.isMenuState() {
 			return m.handleMenuKey(msg)
 		}
@@ -197,12 +177,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.items = m.items[:len(m.items)-1]
 			}
 			m.items = append(m.items, msg.items...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.items = msg.items
+			isNewState := msg.nextState != m.kind
 			m.kind = msg.nextState
-			m.filter = ""
+			if isNewState {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextToken != nil
@@ -226,13 +214,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.ec2Instances = append(m.ec2Instances, msg.items...)
 			m.items = append(m.items, entries...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.ec2Instances = msg.items
 			m.items = entries
+			isNewState := msg.nextState != m.kind
 			m.kind = msg.nextState
-			m.filter = ""
+			if isNewState {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextToken != nil
@@ -250,12 +246,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.items = m.items[:len(m.items)-1]
 			}
 			m.items = append(m.items, msg.items...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.items = msg.items
+			isNewState := msg.nextState != m.kind
 			m.kind = msg.nextState
-			m.filter = ""
+			if isNewState {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextName != nil
@@ -270,11 +274,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case listLoadedMsg:
 		m.searching = false
 		m.items = msg.items
+		isNewState := msg.nextState != m.kind
 		m.kind = msg.nextState
+		if isNewState {
+			m.filter = ""
+			m.filterMode = false
+		}
 		m.selected = 0
 		m.hasMore = false
 		m.pageToken = ""
 		m.searchPending = false
+		m.resetSort()
+		if len(msg.columns) > 0 {
+			m.tableColumns = msg.columns
+		}
 		return m, nil
 
 	case ec2InstancesLoadedMsg:
@@ -288,16 +301,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.items[i] = listEntry{Title: title, ID: inst.ID}
 		}
+		if m.kind != stateEC2InstanceList {
+			m.filter = ""
+			m.filterMode = false
+		}
 		m.kind = stateEC2InstanceList
-		m.filter = ""
 		m.selected = 0
 		return m, nil
 
 	case ssmParamsLoadedMsg:
 		m.searching = false
 		m.items = msg.items
+		if m.kind != stateSSMParamList {
+			m.filter = ""
+			m.filterMode = false
+		}
 		m.kind = stateSSMParamList
-		m.filter = ""
 		m.selected = 0
 		return m, nil
 
@@ -337,13 +356,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hasMore = false
 		m.pageToken = ""
 		m.searchPending = false
+		m.resetSort()
 		return m, nil
 
 	case s3ObjectsLoadedMsg:
 		m.searching = false
 		m.items = msg.items
+		if m.kind != stateS3ObjectList {
+			m.filter = ""
+			m.filterMode = false
+		}
 		m.kind = stateS3ObjectList
-		m.filter = ""
 		m.selected = 0
 		return m, nil
 
@@ -357,8 +380,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ID:    inst.ID,
 			}
 		}
+		if m.kind != stateSSMLoginInstanceList {
+			m.filter = ""
+			m.filterMode = false
+		}
 		m.kind = stateSSMLoginInstanceList
-		m.filter = ""
 		m.selected = 0
 		if msg.nextToken != nil {
 			m.pageToken = *msg.nextToken
@@ -375,12 +401,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.items = m.items[:len(m.items)-1]
 			}
 			m.items = append(m.items, msg.items...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.items = msg.items
+			if m.kind != stateELBList {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.kind = stateELBList
-			m.filter = ""
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextToken != nil
@@ -398,12 +431,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.items = m.items[:len(m.items)-1]
 			}
 			m.items = append(m.items, msg.items...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.items = msg.items
+			isNewState := msg.nextState != m.kind
 			m.kind = msg.nextState
-			m.filter = ""
+			if isNewState {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextToken != nil
@@ -421,12 +462,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.items = m.items[:len(m.items)-1]
 			}
 			m.items = append(m.items, msg.items...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.items = msg.items
+			if m.kind != stateRDSInstanceList {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.kind = stateRDSInstanceList
-			m.filter = ""
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextToken != nil
@@ -444,12 +492,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.items = m.items[:len(m.items)-1]
 			}
 			m.items = append(m.items, msg.items...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.items = msg.items
+			if m.kind != stateCloudFrontDistList {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.kind = stateCloudFrontDistList
-			m.filter = ""
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextToken != nil
@@ -463,12 +518,24 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.searching = false
 		m.items = msg.items
 		m.ec2Volumes = msg.volumes
-		m.volumeSortDesc = false
 		m.kind = stateEC2VolumeList
 		m.selected = 0
 		m.hasMore = false
 		m.pageToken = ""
 		m.searchPending = false
+		m.resetSort()
+		return m, nil
+
+	case snapshotListLoadedMsg:
+		m.searching = false
+		m.items = msg.items
+		m.ec2Snapshots = msg.snapshots
+		m.kind = stateEC2SnapshotList
+		m.selected = 0
+		m.hasMore = false
+		m.pageToken = ""
+		m.searchPending = false
+		m.resetSort()
 		return m, nil
 
 	case lambdaListLoadedMsg:
@@ -479,18 +546,41 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.items = m.items[:len(m.items)-1]
 			}
 			m.items = append(m.items, msg.items...)
+			if m.sortColIdx >= 0 {
+				m.sortItemsByColumn()
+			}
 		} else {
 			m.items = msg.items
+			if m.kind != stateLambdaFunctionList {
+				m.filter = ""
+				m.filterMode = false
+			}
 			m.kind = stateLambdaFunctionList
-			m.filter = ""
 			m.selected = 0
 			m.searchPending = false
+			m.resetSort()
 		}
 		m.pageToken = ""
 		m.hasMore = msg.nextToken != nil
 		if msg.nextToken != nil {
 			m.pageToken = *msg.nextToken
 			m.items = append(m.items, listEntry{Title: "→ Load more...", ID: loadMoreID})
+		}
+		return m, nil
+
+	case billingResourceListMsg:
+		m.items = msg.items
+		if m.kind != stateBillingTopResources {
+			m.filter = ""
+			m.filterMode = false
+		}
+		m.kind = stateBillingTopResources
+		m.selected = 0
+		m.detailMap = nil
+		m.mergeDetailMap(msg.detailMap)
+		m.resetSort()
+		if len(msg.columns) > 0 {
+			m.tableColumns = msg.columns
 		}
 		return m, nil
 
@@ -526,88 +616,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleRemoteSearchKey handles keyboard input for remote-searchable list states.
-// Printable chars and backspace update m.filter and start a 2s debounce timer.
-// Enter triggers immediate search if pending; otherwise selects the item.
-// Esc clears filter (if non-empty) or goes back.
-func (m *model) handleRemoteSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch {
-	case msg.String() == "backspace" || (len(msg.Runes) == 1 && (msg.Runes[0] == 8 || msg.Runes[0] == 127)):
-		if len(m.filter) > 0 {
-			m.filter = m.filter[:len(m.filter)-1]
-			if m.filter == "" {
-				m.searchPending = false
-				m.searching = true
-				m.pageToken = ""
-				m.hasMore = false
-				m.selected = 0
-				return m, m.triggerSearchCmd()
-			}
-			m.searchPending = true
-			m.searchSeq++
-			seq := m.searchSeq
-			m.selected = 0
-			return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
-				return searchTickMsg{seq: seq}
-			})
-		}
-		return m, nil
-
-	case len(msg.Runes) == 1 && msg.Runes[0] >= 32 && msg.Runes[0] < 127:
-		m.filter += string(msg.Runes[0])
-		m.searchPending = true
-		m.searchSeq++
-		seq := m.searchSeq
-		m.selected = 0
-		return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
-			return searchTickMsg{seq: seq}
-		})
-
-	case msg.String() == "enter":
-		if m.searchPending {
-			m.searchPending = false
-			m.searching = true
-			m.pageToken = ""
-			m.hasMore = false
-			return m, m.triggerSearchCmd()
-		}
-		return m.handleListEnter()
-
-	case msg.String() == "up" || msg.String() == "k":
-		if m.selected > 0 {
-			m.selected--
-		}
-		return m, nil
-
-	case msg.String() == "down" || msg.String() == "j":
-		items := m.visibleItems()
-		if m.selected < len(items)-1 {
-			m.selected++
-		}
-		return m, nil
-
-	case msg.String() == "alt+s":
-		if m.kind == stateEC2VolumeList {
-			m.sortVolumesBySize()
-			return m, nil
-		}
-		return m, nil
-
-	case msg.String() == "esc":
-		if m.filter != "" {
-			m.filter = ""
-			m.searchPending = false
-			m.searching = true
-			m.pageToken = ""
-			m.hasMore = false
-			m.selected = 0
-			return m, m.triggerSearchCmd()
-		}
-		return m.handleBack()
-	}
-	return m, nil
-}
-
 // visibleItems returns items for display.
 // For remote-searchable states, no local filtering — items are already filtered server-side.
 // For local-filter states, apply fuzzy match.
@@ -620,13 +628,13 @@ func (m *model) visibleItems() []listEntry {
 
 func (m *model) isListState() bool {
 	switch m.kind {
-	case stateProfile, stateRegion, stateEC2InstanceList, stateEC2VPCList, stateEC2SubnetList, stateEC2SGList, stateEC2KeyList, stateEC2VolumeList, stateEC2AMIList,
+	case stateProfile, stateRegion, stateEC2InstanceList, stateEC2VPCList, stateEC2SubnetList, stateEC2SGList, stateEC2KeyList, stateEC2VolumeList, stateEC2SnapshotList, stateEC2AMIList,
 		stateSSMParamList, stateSSMLoginInstanceList, stateSecretsList, stateS3BucketList, stateS3ObjectList,
 		stateACMCertList, stateRoute53ZoneList, stateRoute53RecordList,
 		stateEKSClusterList, stateECRRepoList, stateECRImageList, stateELBList,
 		stateIAMUserList, stateIAMRoleList, stateIAMPolicyList,
 		stateRDSInstanceList, stateKMSKeyList, stateCloudFrontDistList, stateLambdaFunctionList,
-		stateBillingServiceCost:
+		stateBillingServiceCost, stateBillingTopResources:
 		return true
 	}
 	return false
@@ -653,7 +661,7 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 		switch idx {
 		case 0:
 			m.kind = stateEC2Menu
-			m.menuItems = []string{"Instances", "VPCs", "Subnets", "Security Groups", "Key Pairs", "Volumes", "AMIs", "Back"}
+			m.menuItems = []string{"Instances", "VPCs", "Subnets", "Security Groups", "Key Pairs", "Volumes", "Snapshots", "AMIs", "Back"}
 			m.menuSelected = 0
 			return m, nil
 		case 1:
@@ -716,7 +724,7 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			return m, lambdaFuncListCmd(m, nil, false, "")
 		case 14: // Billing
 			m.kind = stateBillingMenu
-			m.menuItems = []string{"Monthly cost (6 months)", "Cost by service (this month)", "Daily cost (30 days)", "Back"}
+			m.menuItems = billingMenuItems()
 			m.menuSelected = 0
 			return m, nil
 		case 15:
@@ -724,7 +732,7 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case stateEC2Menu:
-		if idx == 7 {
+		if idx == 8 {
 			return m.handleBack()
 		}
 		return m.runEC2Menu(idx)
@@ -764,7 +772,7 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 		}
 		return m.runIAMMenu(idx)
 	case stateBillingMenu:
-		if idx == 3 {
+		if idx == 5 {
 			return m.handleBack()
 		}
 		return m.runBillingMenu(idx)
@@ -887,6 +895,14 @@ func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 		return m, nil
 	case stateBillingServiceCost:
 		return m, billingServiceDetailCmd(m, entry.ID)
+	case stateBillingTopResources:
+		if d, ok := m.detailMap[entry.ID]; ok {
+			m.msgText = d
+			m.msgErr = false
+			m.prevStateAfterMessage = stateBillingTopResources
+			m.kind = stateMessage
+		}
+		return m, nil
 	}
 	return m, nil
 }

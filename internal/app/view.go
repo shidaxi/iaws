@@ -17,50 +17,54 @@ var (
 	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("78"))
 )
 
-func (m *model) searchSubtitle() string {
-	if m.searching {
-		if m.filter == "" {
-			return "Loading..."
+func (m *model) filterSubtitle() string {
+	if m.filterMode {
+		if m.searching {
+			return "/" + m.filter + " ..."
 		}
-		return "Searching: " + m.filter + " ..."
+		if m.searchPending {
+			return "/" + m.filter + "  (Enter to search)"
+		}
+		return "/" + m.filter + "_"
 	}
-	if m.filter == "" {
-		return ""
+	if m.searching {
+		if m.filter != "" {
+			return "search: " + m.filter + " ..."
+		}
+		return "Loading..."
 	}
-	if m.searchPending {
-		return "Search: " + m.filter + "  (Enter or wait 2s)"
+	if m.filter != "" {
+		return "filter: " + m.filter
 	}
-	return "Search: " + m.filter
+	return ""
 }
 
 func (m *model) View() string {
 	switch m.kind {
 	case stateProfile:
-		return m.viewList("Select profile", "filter: "+m.filter)
+		return m.viewList("Select profile", m.filterSubtitle())
 	case stateRegion:
-		return m.viewList("Select region", "filter: "+m.filter)
+		return m.viewList("Select region", m.filterSubtitle())
 	case stateMainMenu:
 		return m.viewMenu("iaws — Main menu", "Profile: "+m.profile+"  Region: "+m.region)
 	case stateEC2Menu:
 		return m.viewMenu("EC2", "")
 	case stateEC2InstanceAction:
 		return m.viewMenu("Instance "+m.confirmTarget+" — Start/Stop/Reboot", "")
-	case stateEC2InstanceList, stateEC2VPCList, stateEC2SubnetList, stateEC2SGList, stateEC2KeyList, stateEC2AMIList:
-		return m.viewList(m.ec2ListTitle(), m.searchSubtitle())
-	case stateEC2VolumeList:
-		return m.viewVolumeList()
+	case stateEC2InstanceList, stateEC2VPCList, stateEC2SubnetList, stateEC2SGList, stateEC2KeyList, stateEC2VolumeList, stateEC2SnapshotList, stateEC2AMIList:
+		return m.viewList(m.ec2ListTitle(), m.filterSubtitle())
 	case stateSSMMenu:
 		return m.viewMenu("SSM", "")
 	case stateSSMParamList:
-		return m.viewList("SSM Parameters", m.searchSubtitle())
+		return m.viewList("SSM Parameters", m.filterSubtitle())
 	case stateSSMParamGet:
 		return m.viewList("SSM Parameters", "")
 	case stateSSMLoginInstanceList:
-		return m.viewList("Select instance for SSM session", m.searchSubtitle())
+		return m.viewList("Select instance for SSM session", m.filterSubtitle())
 	case stateSecretsMenu:
 		return m.viewMenu("Secrets Manager", "")
 	case stateSecretsList:
-		return m.viewList("Secrets", m.searchSubtitle())
+		return m.viewList("Secrets", m.filterSubtitle())
 	case stateSecretGet:
 		return m.viewList("Secrets", "")
 	case stateSecretPut:
@@ -68,52 +72,55 @@ func (m *model) View() string {
 	case stateS3Menu:
 		return m.viewMenu("S3", "")
 	case stateS3BucketList:
-		return m.viewList("S3 Buckets", m.searchSubtitle())
+		return m.viewList("S3 Buckets", m.filterSubtitle())
 	case stateS3ObjectList:
-		return m.viewList("S3: "+m.s3Bucket+"/"+m.s3Prefix, m.searchSubtitle())
+		return m.viewList("S3: "+m.s3Bucket+"/"+m.s3Prefix, m.filterSubtitle())
 	case stateS3GetObject:
 		return m.viewList("S3", "")
 	case stateACMMenu:
 		return m.viewMenu("ACM (Certificate Manager)", "")
 	case stateACMCertList:
-		return m.viewList("ACM Certificates", m.searchSubtitle())
+		return m.viewList("ACM Certificates", m.filterSubtitle())
 	case stateACMCertDetail:
 		return m.viewList("Certificate Detail", "")
 	case stateRoute53Menu:
 		return m.viewMenu("Route 53", "")
 	case stateRoute53ZoneList:
-		return m.viewList("Hosted Zones", m.searchSubtitle())
+		return m.viewList("Hosted Zones", m.filterSubtitle())
 	case stateRoute53RecordList:
-		return m.viewList("Records: "+m.r53ZoneName, m.searchSubtitle())
+		return m.viewList("Records: "+m.r53ZoneName, m.filterSubtitle())
 	case stateEKSClusterList:
-		return m.viewList("EKS Clusters", m.searchSubtitle())
+		return m.viewList("EKS Clusters", m.filterSubtitle())
 	case stateECRRepoList:
-		return m.viewList("ECR Repositories", m.searchSubtitle())
+		return m.viewList("ECR Repositories", m.filterSubtitle())
 	case stateECRImageList:
-		return m.viewList("ECR Images: "+m.ecrRepoName, m.searchSubtitle())
+		return m.viewList("ECR Images: "+m.ecrRepoName, m.filterSubtitle())
 	case stateELBList:
-		return m.viewList("Load Balancers", m.searchSubtitle())
+		return m.viewList("Load Balancers", m.filterSubtitle())
 	case stateIAMMenu:
 		return m.viewMenu("IAM", "")
 	case stateIAMUserList:
-		return m.viewList("IAM Users", m.searchSubtitle())
+		return m.viewList("IAM Users", m.filterSubtitle())
 	case stateIAMRoleList:
-		return m.viewList("IAM Roles", m.searchSubtitle())
+		return m.viewList("IAM Roles", m.filterSubtitle())
 	case stateIAMPolicyList:
-		return m.viewList("IAM Policies", m.searchSubtitle())
+		return m.viewList("IAM Policies", m.filterSubtitle())
 	case stateRDSInstanceList:
-		return m.viewList("RDS Instances", m.searchSubtitle())
+		return m.viewList("RDS Instances", m.filterSubtitle())
 	case stateKMSKeyList:
-		return m.viewList("KMS Keys", m.searchSubtitle())
+		return m.viewList("KMS Keys", m.filterSubtitle())
 	case stateCloudFrontDistList:
-		return m.viewList("CloudFront Distributions", m.searchSubtitle())
+		return m.viewList("CloudFront Distributions", m.filterSubtitle())
 	case stateLambdaFunctionList:
-		return m.viewList("Lambda Functions", m.searchSubtitle())
+		return m.viewList("Lambda Functions", m.filterSubtitle())
 	case stateBillingMenu:
 		return m.viewMenu("Billing (Cost Explorer)", "")
 	case stateBillingServiceCost:
 		now := time.Now().UTC()
-		return m.viewList("Cost by Service ("+now.Format("2006-01")+")", "filter: "+m.filter)
+		return m.viewList("Cost by Service ("+now.Format("2006-01")+")", m.filterSubtitle())
+	case stateBillingTopResources:
+		now := time.Now().UTC()
+		return m.viewList("Top Resources ("+now.Format("2006-01")+")", m.filterSubtitle())
 	case stateS3PutObject:
 		return m.viewS3PutInput()
 	case stateConfirm:
@@ -139,6 +146,8 @@ func (m *model) ec2ListTitle() string {
 		return "Key Pairs"
 	case stateEC2VolumeList:
 		return "Volumes"
+	case stateEC2SnapshotList:
+		return "Snapshots"
 	case stateEC2AMIList:
 		return "AMIs"
 	}
@@ -165,8 +174,57 @@ func (m *model) viewMenu(title, subtitle string) string {
 	return b.String()
 }
 
+func (m *model) renderTableHeader() string {
+	cols := m.getTableColumns()
+	if len(cols) == 0 {
+		return ""
+	}
+	var header strings.Builder
+	totalWidth := 0
+	for i, col := range cols {
+		if i > 0 {
+			header.WriteString(" ")
+			totalWidth++
+		}
+		name := col.Name
+		if i == m.sortColIdx && m.sorted {
+			if m.sortDesc {
+				name += "↓"
+			} else {
+				name += "↑"
+			}
+		}
+		w := col.Width
+		if w < 0 {
+			w = len([]rune(name))
+		}
+		padded := fmt.Sprintf("%-*s", w, name)
+		if i == m.sortColIdx {
+			header.WriteString(selStyle.Render(padded))
+		} else {
+			header.WriteString(dimStyle.Render(padded))
+		}
+		totalWidth += w
+	}
+	sep := dimStyle.Render(strings.Repeat("─", totalWidth))
+	return "  " + header.String() + "\n  " + sep + "\n"
+}
+
 func (m *model) viewList(title, subtitle string) string {
 	items := m.visibleItems()
+	cols := m.getTableColumns()
+	hasHeader := len(cols) > 0
+
+	var hint string
+	if m.filterMode {
+		hint = "type to filter · Enter done · Esc clear"
+	} else {
+		hint = "↑/k ↓/j Enter Esc · / search"
+		if hasHeader {
+			hint += " · Tab col · s sort"
+		}
+	}
+
 	if len(items) == 0 {
 		var b strings.Builder
 		b.WriteString(titleStyle.Render(title) + "\n")
@@ -174,13 +232,12 @@ func (m *model) viewList(title, subtitle string) string {
 			b.WriteString(dimStyle.Render(subtitle) + "\n")
 		}
 		b.WriteString("\n")
+		if hasHeader {
+			b.WriteString(m.renderTableHeader())
+		}
 		b.WriteString(dimStyle.Render("(no items)"))
 		b.WriteString("\n\n")
-		if m.isRemoteSearchState() {
-			b.WriteString(dimStyle.Render("↑/k ↓/j Enter Esc back · type to search"))
-		} else {
-			b.WriteString(dimStyle.Render("↑/k ↓/j Enter Esc back · type to filter"))
-		}
+		b.WriteString(dimStyle.Render(hint))
 		return b.String()
 	}
 	sel := m.selected
@@ -210,6 +267,9 @@ func (m *model) viewList(title, subtitle string) string {
 		b.WriteString(dimStyle.Render(subtitle))
 	}
 	b.WriteString("\n\n")
+	if hasHeader {
+		b.WriteString(m.renderTableHeader())
+	}
 	for i := start; i < end; i++ {
 		item := items[i]
 		if i == sel {
@@ -222,76 +282,7 @@ func (m *model) viewList(title, subtitle string) string {
 		b.WriteString(dimStyle.Render(fmt.Sprintf("— %d of %d —", sel+1, len(items))) + "\n")
 	}
 	b.WriteString("\n")
-	if m.isRemoteSearchState() {
-		b.WriteString(dimStyle.Render("↑/k ↓/j Enter Esc back · type to search"))
-	} else {
-		b.WriteString(dimStyle.Render("↑/k ↓/j Enter Esc back · type to filter"))
-	}
-	return b.String()
-}
-
-func (m *model) viewVolumeList() string {
-	subtitle := m.searchSubtitle()
-	if subtitle == "" {
-		if m.volumeSortDesc {
-			subtitle = "sorted by size ↓"
-		} else if len(m.ec2Volumes) > 0 && m.items != nil {
-			subtitle = "sorted by size ↑"
-		}
-	}
-	items := m.visibleItems()
-	if len(items) == 0 {
-		var b strings.Builder
-		b.WriteString(titleStyle.Render("Volumes") + "\n")
-		if subtitle != "" {
-			b.WriteString(dimStyle.Render(subtitle) + "\n")
-		}
-		b.WriteString("\n")
-		b.WriteString(dimStyle.Render("(no items)"))
-		b.WriteString("\n\n")
-		b.WriteString(dimStyle.Render("↑/k ↓/j Enter Esc back · type to search · Opt-s sort by size"))
-		return b.String()
-	}
-	sel := m.selected
-	if sel >= len(items) {
-		sel = len(items) - 1
-	}
-	if sel < 0 {
-		sel = 0
-	}
-	pageSize := 20
-	start := sel - pageSize/2
-	if start < 0 {
-		start = 0
-	}
-	end := start + pageSize
-	if end > len(items) {
-		end = len(items)
-		start = end - pageSize
-		if start < 0 {
-			start = 0
-		}
-	}
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("Volumes"))
-	if subtitle != "" {
-		b.WriteString("\n")
-		b.WriteString(dimStyle.Render(subtitle))
-	}
-	b.WriteString("\n\n")
-	for i := start; i < end; i++ {
-		item := items[i]
-		if i == sel {
-			b.WriteString(selStyle.Render("> "+item.Title) + "\n")
-		} else {
-			b.WriteString("  " + item.Title + "\n")
-		}
-	}
-	if len(items) > pageSize {
-		b.WriteString(dimStyle.Render(fmt.Sprintf("— %d of %d —", sel+1, len(items))) + "\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("↑/k ↓/j Enter Esc back · type to search · Opt-s sort by size"))
+	b.WriteString(dimStyle.Render(hint))
 	return b.String()
 }
 
