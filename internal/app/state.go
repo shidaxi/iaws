@@ -5,7 +5,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbletea"
 	"github.com/shidaxi/iaws/internal/config"
 	"github.com/shidaxi/iaws/internal/services"
 )
@@ -105,6 +107,13 @@ type Model struct {
 	sortDesc     bool // sort direction
 	sorted       bool // true after pressing 's' (actively sorted)
 
+	// popup context menu (overlaid on list, e.g. EC2 instance actions)
+	popupVisible  bool
+	popupItems    []string
+	popupSelected int
+	popupTarget   string // target ID (e.g. instance ID)
+	popupAction   string // action category
+
 	// menu: items and selected index
 	menuItems   []string
 	menuSelected int
@@ -145,6 +154,10 @@ type Model struct {
 	// server-side pagination
 	pageToken string // next page token for current list
 	hasMore   bool   // whether there are more pages
+
+	// loading spinner
+	loading      bool
+	spinnerFrame int
 
 	// remote search (debounced)
 	searchSeq     int  // incremented per keystroke; used to discard stale timer callbacks
@@ -459,4 +472,24 @@ func matchFilter(s string, filter []rune) bool {
 		}
 	}
 	return j == len(filter)
+}
+
+// ─── loading spinner ────────────────────────────────────────────────────────
+
+var spinnerFrames = []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+
+func spinnerTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(time.Time) tea.Msg {
+		return spinnerTickMsg{}
+	})
+}
+
+func (m *model) spinnerChar() string {
+	return string(spinnerFrames[m.spinnerFrame%len(spinnerFrames)])
+}
+
+func (m *model) setLoading(cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	m.loading = true
+	m.spinnerFrame = 0
+	return m, tea.Batch(cmd, spinnerTick())
 }

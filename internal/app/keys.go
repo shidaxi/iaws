@@ -55,14 +55,14 @@ func (m *model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selected = 0
 			if m.isRemoteSearchState() {
 				m.searchPending = false
-				m.searching = true
-				m.pageToken = ""
-				m.hasMore = false
-				return m, m.triggerSearchCmd()
-			}
-			return m, nil
+			m.searching = true
+			m.pageToken = ""
+			m.hasMore = false
+			return m.setLoading(m.triggerSearchCmd())
 		}
-		return m.handleBack()
+		return m, nil
+	}
+	return m.handleBack()
 	}
 	return m, nil
 }
@@ -78,7 +78,7 @@ func (m *model) handleFilterModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.searching = true
 			m.pageToken = ""
 			m.hasMore = false
-			return m, m.triggerSearchCmd()
+			return m.setLoading(m.triggerSearchCmd())
 		}
 		return m, nil
 	case msg.String() == "esc":
@@ -91,7 +91,7 @@ func (m *model) handleFilterModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.searching = true
 				m.pageToken = ""
 				m.hasMore = false
-				return m, m.triggerSearchCmd()
+				return m.setLoading(m.triggerSearchCmd())
 			}
 		}
 		return m, nil
@@ -121,6 +121,35 @@ func (m *model) handleFilterModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			})
 		}
 		return m, nil
+	}
+	return m, nil
+}
+
+// handlePopupKey handles key presses when a popup context menu is visible.
+func (m *model) handlePopupKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.popupSelected > 0 {
+			m.popupSelected--
+		}
+	case "down", "j":
+		if m.popupSelected < len(m.popupItems)-1 {
+			m.popupSelected++
+		}
+	case "enter":
+		return m.onPopupSelect()
+	case "esc":
+		m.popupVisible = false
+	}
+	return m, nil
+}
+
+func (m *model) onPopupSelect() (tea.Model, tea.Cmd) {
+	m.popupVisible = false
+	switch m.popupAction {
+	case "ec2-instance":
+		m.confirmTarget = m.popupTarget
+		return m.onEC2InstanceActionSelect(m.popupSelected)
 	}
 	return m, nil
 }
@@ -187,10 +216,6 @@ func (m *model) handleBack() (tea.Model, tea.Cmd) {
 		m.items = nil
 		m.filter = ""
 		m.searchPending = false
-		return m, nil
-	case stateEC2InstanceAction:
-		m.kind = stateEC2InstanceList
-		m.selected = 0
 		return m, nil
 	case stateSSMParamList, stateSSMLoginInstanceList:
 		m.kind = stateSSMMenu
@@ -280,7 +305,7 @@ func (m *model) handleBack() (tea.Model, tea.Cmd) {
 	case stateECRImageList:
 		m.resetPage()
 		m.detailMap = nil
-		return m, ecrRepoListCmd(m, nil, false, "")
+		return m.setLoading(ecrRepoListCmd(m, nil, false, ""))
 	case stateIAMUserList, stateIAMRoleList, stateIAMPolicyList:
 		m.kind = stateIAMMenu
 		m.menuSelected = 0

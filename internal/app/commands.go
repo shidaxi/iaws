@@ -181,21 +181,21 @@ func (m *model) runEC2Menu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
 		m.resetPage()
-		return m, ec2InstancesCmd(m, nil, false, "")
+		return m.setLoading(ec2InstancesCmd(m, nil, false, ""))
 	case 1:
-		return m, ec2VPCsCmd(m, "")
+		return m.setLoading(ec2VPCsCmd(m, ""))
 	case 2:
-		return m, ec2SubnetsCmd(m, "")
+		return m.setLoading(ec2SubnetsCmd(m, ""))
 	case 3:
-		return m, ec2SGsCmd(m, "")
+		return m.setLoading(ec2SGsCmd(m, ""))
 	case 4:
-		return m, ec2KeyPairsCmd(m, "")
+		return m.setLoading(ec2KeyPairsCmd(m, ""))
 	case 5:
-		return m, ec2VolumesCmd(m, "")
+		return m.setLoading(ec2VolumesCmd(m, ""))
 	case 6:
-		return m, ec2SnapshotsCmd(m, "")
+		return m.setLoading(ec2SnapshotsCmd(m, ""))
 	case 7:
-		return m, ec2AMIsCmd(m, "")
+		return m.setLoading(ec2AMIsCmd(m, ""))
 	}
 	return m, nil
 }
@@ -274,14 +274,14 @@ func (m *model) runSSMMenu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
 		m.resetPage()
-		return m, ssmLoginInstancesCmd(m, nil, false, "")
+		return m.setLoading(ssmLoginInstancesCmd(m, nil, false, ""))
 	case 1:
 		m.resetPage()
-		return m, ssmParamsCmd(m, nil, false, "")
+		return m.setLoading(ssmParamsCmd(m, nil, false, ""))
 	case 2:
 		m.prevSecretAction = "get"
 		m.resetPage()
-		return m, secretsListCmd(m, nil, false, "")
+		return m.setLoading(secretsListCmd(m, nil, false, ""))
 	}
 	return m, nil
 }
@@ -316,15 +316,15 @@ func (m *model) runSecretsMenu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
 		m.resetPage()
-		return m, secretsListCmd(m, nil, false, "")
+		return m.setLoading(secretsListCmd(m, nil, false, ""))
 	case 1:
 		m.prevSecretAction = "get"
 		m.resetPage()
-		return m, secretsListCmd(m, nil, false, "")
+		return m.setLoading(secretsListCmd(m, nil, false, ""))
 	case 2:
 		m.prevSecretAction = "put"
 		m.resetPage()
-		return m, secretsListCmd(m, nil, false, "")
+		return m.setLoading(secretsListCmd(m, nil, false, ""))
 	}
 	return m, nil
 }
@@ -376,16 +376,16 @@ func s3BucketsCmd(m *model, filter string) tea.Cmd {
 func (m *model) runS3Menu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
-		return m, s3BucketsCmd(m, "")
+		return m.setLoading(s3BucketsCmd(m, ""))
 	case 1:
 		m.s3MenuUpload = false
-		return m, s3BucketsCmd(m, "")
+		return m.setLoading(s3BucketsCmd(m, ""))
 	case 2:
 		m.s3MenuUpload = false
-		return m, s3BucketsCmd(m, "")
+		return m.setLoading(s3BucketsCmd(m, ""))
 	case 3:
 		m.s3MenuUpload = true
-		return m, s3BucketsCmd(m, "")
+		return m.setLoading(s3BucketsCmd(m, ""))
 	}
 	return m, nil
 }
@@ -423,7 +423,7 @@ func (m *model) runACMMenu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
 		m.resetPage()
-		return m, acmCertsCmd(m, nil, false, "")
+		return m.setLoading(acmCertsCmd(m, nil, false, ""))
 	}
 	return m, nil
 }
@@ -472,7 +472,7 @@ func (m *model) runRoute53Menu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
 		m.resetPage()
-		return m, r53ZonesCmd(m, nil, false, "")
+		return m.setLoading(r53ZonesCmd(m, nil, false, ""))
 	}
 	return m, nil
 }
@@ -612,11 +612,11 @@ func (m *model) runIAMMenu(idx int) (tea.Model, tea.Cmd) {
 	m.detailMap = nil
 	switch idx {
 	case 0:
-		return m, iamUsersCmd(m, nil, false, "")
+		return m.setLoading(iamUsersCmd(m, nil, false, ""))
 	case 1:
-		return m, iamRolesCmd(m, nil, false, "")
+		return m.setLoading(iamRolesCmd(m, nil, false, ""))
 	case 2:
-		return m, iamPoliciesCmd(m, nil, false, "")
+		return m.setLoading(iamPoliciesCmd(m, nil, false, ""))
 	}
 	return m, nil
 }
@@ -864,15 +864,15 @@ func billingOptimizationCmd(m *model) tea.Cmd {
 func (m *model) runBillingMenu(idx int) (tea.Model, tea.Cmd) {
 	switch idx {
 	case 0:
-		return m, billingMonthlyCostCmd(m)
+		return m.setLoading(billingMonthlyCostCmd(m))
 	case 1:
-		return m, billingServiceCostCmd(m)
+		return m.setLoading(billingServiceCostCmd(m))
 	case 2:
-		return m, billingDailyCostCmd(m)
+		return m.setLoading(billingDailyCostCmd(m))
 	case 3:
-		return m, billingTopResourcesCmd(m)
+		return m.setLoading(billingTopResourcesCmd(m))
 	case 4:
-		return m, billingOptimizationCmd(m)
+		return m.setLoading(billingOptimizationCmd(m))
 	}
 	return m, nil
 }
@@ -898,6 +898,12 @@ func (m *model) onEC2InstanceActionSelect(menuIdx int) (tea.Model, tea.Cmd) {
 	case 2:
 		m.confirmMsg = "Reboot instance " + m.confirmTarget + "? (y/n)"
 		m.confirmAction = "reboot"
+		m.confirmBackState = stateEC2InstanceList
+		m.kind = stateConfirm
+		return m, nil
+	case 3:
+		m.confirmMsg = "Terminate instance " + m.confirmTarget + "? This is irreversible! (y/n)"
+		m.confirmAction = "terminate"
 		m.confirmBackState = stateEC2InstanceList
 		m.kind = stateConfirm
 		return m, nil
@@ -934,6 +940,8 @@ func (m *model) runConfirm() (tea.Model, tea.Cmd) {
 		err = m.ec2.RebootInstance(m.ctx, m.confirmTarget)
 	case "start":
 		err = m.ec2.StartInstance(m.ctx, m.confirmTarget)
+	case "terminate":
+		err = m.ec2.TerminateInstance(m.ctx, m.confirmTarget)
 	case "putSecret":
 		err = m.secrets.PutSecretValue(m.ctx, m.confirmTarget, m.confirmData)
 	}

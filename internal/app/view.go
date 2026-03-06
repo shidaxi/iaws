@@ -18,9 +18,13 @@ var (
 )
 
 func (m *model) filterSubtitle() string {
+	spin := ""
+	if m.loading {
+		spin = " " + m.spinnerChar()
+	}
 	if m.filterMode {
 		if m.searching {
-			return "/" + m.filter + " ..."
+			return "/" + m.filter + spin
 		}
 		if m.searchPending {
 			return "/" + m.filter + "  (Enter to search)"
@@ -29,14 +33,21 @@ func (m *model) filterSubtitle() string {
 	}
 	if m.searching {
 		if m.filter != "" {
-			return "search: " + m.filter + " ..."
+			return "search: " + m.filter + spin
 		}
-		return "Loading..."
+		return m.spinnerChar() + " Loading..."
 	}
 	if m.filter != "" {
 		return "filter: " + m.filter
 	}
 	return ""
+}
+
+func (m *model) loadingIndicator() string {
+	if !m.loading || m.searching {
+		return ""
+	}
+	return "\n" + dimStyle.Render(m.spinnerChar()+" Loading...")
 }
 
 func (m *model) View() string {
@@ -49,8 +60,6 @@ func (m *model) View() string {
 		return m.viewMenu("iaws — Main menu", "Profile: "+m.profile+"  Region: "+m.region)
 	case stateEC2Menu:
 		return m.viewMenu("EC2", "")
-	case stateEC2InstanceAction:
-		return m.viewMenu("Instance "+m.confirmTarget+" — Start/Stop/Reboot", "")
 	case stateEC2InstanceList, stateEC2VPCList, stateEC2SubnetList, stateEC2SGList, stateEC2KeyList, stateEC2VolumeList, stateEC2SnapshotList, stateEC2AMIList:
 		return m.viewList(m.ec2ListTitle(), m.filterSubtitle())
 	case stateSSMMenu:
@@ -171,6 +180,7 @@ func (m *model) viewMenu(title, subtitle string) string {
 	}
 	b.WriteString("\n")
 	b.WriteString(dimStyle.Render("↑/k ↓/j Enter Esc back"))
+	b.WriteString(m.loadingIndicator())
 	return b.String()
 }
 
@@ -210,13 +220,34 @@ func (m *model) renderTableHeader() string {
 	return "  " + header.String() + "\n  " + sep + "\n"
 }
 
+func (m *model) renderPopup() string {
+	var content strings.Builder
+	for i, item := range m.popupItems {
+		if i == m.popupSelected {
+			content.WriteString(selStyle.Render("> " + item))
+		} else {
+			content.WriteString("  " + item)
+		}
+		if i < len(m.popupItems)-1 {
+			content.WriteString("\n")
+		}
+	}
+	popupStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("241")).
+		Padding(0, 1)
+	return popupStyle.Render(content.String())
+}
+
 func (m *model) viewList(title, subtitle string) string {
 	items := m.visibleItems()
 	cols := m.getTableColumns()
 	hasHeader := len(cols) > 0
 
 	var hint string
-	if m.filterMode {
+	if m.popupVisible {
+		hint = "↑/↓ select · Enter confirm · Esc cancel"
+	} else if m.filterMode {
 		hint = "type to filter · Enter done · Esc clear"
 	} else {
 		hint = "↑/k ↓/j Enter Esc · / search"
@@ -274,6 +305,12 @@ func (m *model) viewList(title, subtitle string) string {
 		item := items[i]
 		if i == sel {
 			b.WriteString(selStyle.Render("> "+item.Title) + "\n")
+			if m.popupVisible {
+				popup := m.renderPopup()
+				for _, line := range strings.Split(popup, "\n") {
+					b.WriteString("      " + line + "\n")
+				}
+			}
 		} else {
 			b.WriteString("  " + item.Title + "\n")
 		}
@@ -283,6 +320,7 @@ func (m *model) viewList(title, subtitle string) string {
 	}
 	b.WriteString("\n")
 	b.WriteString(dimStyle.Render(hint))
+	b.WriteString(m.loadingIndicator())
 	return b.String()
 }
 

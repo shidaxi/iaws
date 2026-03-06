@@ -20,7 +20,20 @@ func prettyJSON(s string) string {
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// clear loading on any data-arrival message
+	switch msg.(type) {
+	case tea.WindowSizeMsg, tea.KeyMsg, spinnerTickMsg, searchTickMsg:
+	default:
+		m.loading = false
+	}
+
 	switch msg := msg.(type) {
+	case spinnerTickMsg:
+		if m.loading {
+			m.spinnerFrame++
+			return m, spinnerTick()
+		}
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		return m, nil
@@ -28,8 +41,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		if msg.String() == "q" && !m.filterMode && m.kind != stateSecretPut && m.kind != stateS3PutObject {
+		if msg.String() == "q" && !m.filterMode && !m.popupVisible && m.kind != stateSecretPut && m.kind != stateS3PutObject {
 			return m, tea.Quit
+		}
+		if m.popupVisible {
+			return m.handlePopupKey(msg)
 		}
 		// list state: dispatch to filter mode or normal key handler
 		if m.isListState() {
@@ -127,7 +143,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.searching = true
 			m.pageToken = ""
 			m.hasMore = false
-			return m, m.triggerSearchCmd()
+			return m.setLoading(m.triggerSearchCmd())
 		}
 		return m, nil
 
@@ -645,7 +661,7 @@ func (m *model) isListState() bool {
 
 func (m *model) isMenuState() bool {
 	switch m.kind {
-	case stateMainMenu, stateEC2Menu, stateEC2InstanceAction, stateSSMMenu, stateSecretsMenu, stateS3Menu,
+	case stateMainMenu, stateEC2Menu, stateSSMMenu, stateSecretsMenu, stateS3Menu,
 		stateACMMenu, stateRoute53Menu, stateIAMMenu, stateBillingMenu:
 		return true
 	}
@@ -659,7 +675,7 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		profile := m.items[idx].ID
-		return m, loadAWSCmd(m.ctx, profile, "")
+		return m.setLoading(loadAWSCmd(m.ctx, profile, ""))
 	case stateMainMenu:
 		switch idx {
 		case 0:
@@ -695,15 +711,15 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 		case 6: // EKS — go directly to cluster list
 			m.resetPage()
 			m.detailMap = nil
-			return m, eksClusterListCmd(m, nil, false, "")
+			return m.setLoading(eksClusterListCmd(m, nil, false, ""))
 		case 7: // ECR — go directly to repository list
 			m.resetPage()
 			m.detailMap = nil
-			return m, ecrRepoListCmd(m, nil, false, "")
+			return m.setLoading(ecrRepoListCmd(m, nil, false, ""))
 		case 8: // ELB — go directly to load balancer list
 			m.resetPage()
 			m.detailMap = nil
-			return m, elbListCmd(m, nil, false, "")
+			return m.setLoading(elbListCmd(m, nil, false, ""))
 		case 9: // IAM
 			m.kind = stateIAMMenu
 			m.menuItems = []string{"Users", "Roles", "Policies", "Back"}
@@ -712,19 +728,19 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 		case 10: // RDS
 			m.resetPage()
 			m.detailMap = nil
-			return m, rdsInstanceListCmd(m, nil, false, "")
+			return m.setLoading(rdsInstanceListCmd(m, nil, false, ""))
 		case 11: // KMS
 			m.resetPage()
 			m.detailMap = nil
-			return m, kmsKeyListCmd(m, nil, false, "")
+			return m.setLoading(kmsKeyListCmd(m, nil, false, ""))
 		case 12: // CloudFront
 			m.resetPage()
 			m.detailMap = nil
-			return m, cfDistListCmd(m, nil, false, "")
+			return m.setLoading(cfDistListCmd(m, nil, false, ""))
 		case 13: // Lambda
 			m.resetPage()
 			m.detailMap = nil
-			return m, lambdaFuncListCmd(m, nil, false, "")
+			return m.setLoading(lambdaFuncListCmd(m, nil, false, ""))
 		case 14: // Billing
 			m.kind = stateBillingMenu
 			m.menuItems = billingMenuItems()
@@ -739,8 +755,6 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			return m.handleBack()
 		}
 		return m.runEC2Menu(idx)
-	case stateEC2InstanceAction:
-		return m.onEC2InstanceActionSelect(idx)
 	case stateSSMMenu:
 		if idx == 3 {
 			return m.handleBack()
@@ -756,7 +770,7 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			return m.handleBack()
 		}
 		if idx == 3 {
-			return m, s3BucketsCmd(m, "")
+			return m.setLoading(s3BucketsCmd(m, ""))
 		}
 		return m.runS3Menu(idx)
 	case stateACMMenu:
@@ -785,29 +799,30 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 
 func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 	if entry.ID == loadMoreID {
-		return m, m.loadMoreCmd()
+		return m.setLoading(m.loadMoreCmd())
 	}
 
 	switch m.kind {
 	case stateProfile:
-		return m, loadAWSCmd(m.ctx, entry.ID, "")
+		return m.setLoading(loadAWSCmd(m.ctx, entry.ID, ""))
 	case stateRegion:
 		return m, func() tea.Msg { return regionSelectedMsg{region: entry.ID} }
 	case stateEC2InstanceList:
-		m.confirmTarget = entry.ID
-		m.menuItems = []string{"Start", "Stop", "Reboot"}
-		m.menuSelected = 0
-		m.kind = stateEC2InstanceAction
+		m.popupVisible = true
+		m.popupItems = []string{"Start", "Stop", "Reboot", "Terminate"}
+		m.popupSelected = 0
+		m.popupTarget = entry.ID
+		m.popupAction = "ec2-instance"
 		return m, nil
 	case stateSSMParamList:
 		m.ssmParamName = entry.ID
-		return m, getSSMParamCmd(m, entry.ID)
+		return m.setLoading(getSSMParamCmd(m, entry.ID))
 	case stateSSMLoginInstanceList:
 		return m, startSSMSessionCmd(m, entry.ID)
 	case stateSecretsList:
 		m.secretName = entry.ID
 		if m.prevSecretAction == "get" {
-			return m, getSecretValueCmd(m, entry.ID)
+			return m.setLoading(getSecretValueCmd(m, entry.ID))
 		}
 		m.kind = stateSecretPut
 		m.secretName = entry.ID
@@ -824,21 +839,21 @@ func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.resetPage()
-		return m, listS3ObjectsCmd(m, entry.ID, "", nil, false, "")
+		return m.setLoading(listS3ObjectsCmd(m, entry.ID, "", nil, false, ""))
 	case stateS3ObjectList:
 		if entry.ID == ".." {
 			m.s3Prefix = parentPrefix(m.s3Prefix)
 			m.resetPage()
-			return m, listS3ObjectsCmd(m, m.s3Bucket, m.s3Prefix, nil, false, "")
+			return m.setLoading(listS3ObjectsCmd(m, m.s3Bucket, m.s3Prefix, nil, false, ""))
 		}
 		if entry.IsDir {
 			m.resetPage()
-			return m, listS3ObjectsCmd(m, m.s3Bucket, entry.ID, nil, false, "")
+			return m.setLoading(listS3ObjectsCmd(m, m.s3Bucket, entry.ID, nil, false, ""))
 		}
 		m.s3Key = entry.ID
-		return m, getS3ObjectCmd(m, m.s3Bucket, entry.ID, entry.ID)
+		return m.setLoading(getS3ObjectCmd(m, m.s3Bucket, entry.ID, entry.ID))
 	case stateACMCertList:
-		return m, acmDescribeCmd(m, entry.ID)
+		return m.setLoading(acmDescribeCmd(m, entry.ID))
 	case stateRoute53ZoneList:
 		parts := strings.SplitN(entry.ID, "|", 2)
 		m.r53ZoneID = parts[0]
@@ -846,14 +861,14 @@ func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 			m.r53ZoneName = parts[1]
 		}
 		m.resetPage()
-		return m, r53RecordsCmd(m, m.r53ZoneID, nil, nil, false, "")
+		return m.setLoading(r53RecordsCmd(m, m.r53ZoneID, nil, nil, false, ""))
 	case stateEKSClusterList:
-		return m, eksDescribeClusterCmd(m, entry.ID)
+		return m.setLoading(eksDescribeClusterCmd(m, entry.ID))
 	case stateECRRepoList:
 		m.ecrRepoName = entry.ID
 		m.resetPage()
 		m.detailMap = nil
-		return m, ecrImageListCmd(m, entry.ID, nil, false, "")
+		return m.setLoading(ecrImageListCmd(m, entry.ID, nil, false, ""))
 	case stateELBList:
 		if d, ok := m.detailMap[entry.ID]; ok {
 			m.msgText = d
@@ -879,7 +894,7 @@ func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case stateKMSKeyList:
-		return m, kmsDescribeKeyCmd(m, entry.ID)
+		return m.setLoading(kmsDescribeKeyCmd(m, entry.ID))
 	case stateCloudFrontDistList:
 		if d, ok := m.detailMap[entry.ID]; ok {
 			m.msgText = d
@@ -897,7 +912,7 @@ func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case stateBillingServiceCost:
-		return m, billingServiceDetailCmd(m, entry.ID)
+		return m.setLoading(billingServiceDetailCmd(m, entry.ID))
 	case stateBillingTopResources:
 		if d, ok := m.detailMap[entry.ID]; ok {
 			m.msgText = d

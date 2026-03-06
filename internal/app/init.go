@@ -5,5 +5,6 @@ import (
 )
 
 func (m *model) Init() tea.Cmd {
-	return loadProfilesCmd()
+	m.loading = true
+	return tea.Batch(loadProfilesCmd(), spinnerTick())
 }

@@ -87,6 +87,8 @@ type searchTickMsg struct {
 	seq int
 }
 
+type spinnerTickMsg struct{}
+
 type volumeListLoadedMsg struct {
 	items   []listEntry
 	volumes []services.VolumeItem

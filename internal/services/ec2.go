@@ -88,6 +88,15 @@ func (c *EC2Client) RebootInstance(ctx context.Context, instanceID string) error
 	return err
 }
 
+func (c *EC2Client) TerminateInstance(ctx context.Context, instanceID string) error {
+	ilog.Info("EC2: TerminateInstance %s", instanceID)
+	_, err := c.client.TerminateInstances(ctx, &ec2.TerminateInstancesInput{InstanceIds: []string{instanceID}})
+	if err != nil {
+		ilog.Error("EC2: TerminateInstance %s failed: %v", instanceID, err)
+	}
+	return err
+}
+
 // VPCItem holds data for list display.
 type VPCItem struct {
 	ID        string
