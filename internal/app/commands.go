@@ -792,7 +792,7 @@ func billingTopResourcesCmd(m *model) tea.Cmd {
 		}
 		if len(items) == 0 {
 			return billingCostMsg{
-				detail:    "No resource-level cost data available.\nResource-level data may need to be enabled in your AWS Cost Explorer settings.",
+				detail:    "No resource-level cost data available.\nYou may need to enable resource-level data in AWS Cost Explorer settings.",
 				backState: stateBillingMenu,
 			}
 		}
@@ -946,7 +946,7 @@ func (m *model) runConfirm() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// loadMoreCmd dispatches a "load more" fetch for the current state
+// loadMoreCmd dispatches a "load more" request for the current state
 func (m *model) loadMoreCmd() tea.Cmd {
 	if !m.hasMore || m.pageToken == "" {
 		return nil
@@ -996,7 +996,7 @@ func (m *model) loadMoreCmd() tea.Cmd {
 	return nil
 }
 
-// triggerSearchCmd dispatches a fresh search for the current state using m.filter
+// triggerSearchCmd dispatches a new search request for the current state using m.filter
 func (m *model) triggerSearchCmd() tea.Cmd {
 	filter := m.filter
 	switch m.kind {

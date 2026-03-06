@@ -70,7 +70,7 @@ region = us-east-1
 }
 
 func TestProfilesFromConfig(t *testing.T) {
-	// 不修改真实 home，仅校验返回无错误且至少包含 default
+	// don't modify real home dir; just verify no error and at least contains default
 	got, err := ProfilesFromConfig()
 	if err != nil {
 		t.Fatalf("ProfilesFromConfig: %v", err)

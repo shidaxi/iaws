@@ -19,7 +19,7 @@ type regionSelectedMsg struct {
 	region string
 }
 
-// pagedListMsg is a generic message for server-side paginated list results.
+// pagedListMsg is the generic message for server-side paged list results.
 type pagedListMsg struct {
 	items     []listEntry
 	nextToken *string // nil means no more pages
@@ -27,7 +27,7 @@ type pagedListMsg struct {
 	append    bool // true = append to existing items (load more)
 }
 
-// pagedInstancesMsg for EC2 instances (needs InstanceItem for detail display)
+// pagedInstancesMsg is for EC2 instances (needs InstanceItem for detail display)
 type pagedInstancesMsg struct {
 	items     []services.InstanceItem
 	nextToken *string
@@ -149,7 +149,7 @@ type billingResourceListMsg struct {
 	columns   []columnDef
 }
 
-// route53 record sets pagination needs two tokens
+// Route53 record set pagination requires two tokens
 type r53RecordsMsg struct {
 	items         []listEntry
 	nextName      *string

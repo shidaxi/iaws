@@ -1,67 +1,166 @@
 # iaws (Interactive AWS CLI)
 
-基于 Go 的交互式 AWS CLI：无需拼接长 flag 与复杂参数，通过 Terminal UI 选择与过滤完成常用查看与少量写操作。
+An interactive AWS CLI built with Go — no need to compose long flags or complex arguments. Browse, filter, and manage AWS resources through a Terminal UI.
 
-## 安装
+## Installation
 
 ```bash
 git clone <repo>
 cd iaws
 go mod tidy
 go build -o iaws .
-# 或将 iaws 放到 PATH
+# optionally move iaws to your PATH
 ```
 
-## 依赖与配置
+## Supported AWS Services
 
-- **AWS 认证**：使用 `~/.aws/config` 与 `~/.aws/credentials`。运行 `iaws` 后先选择 **profile**（含 default），再选择 **region**，之后所有操作共用该 profile/region。
-- **Assume Role + MFA**：若所选 profile 启用了 MFA（如 `role_arn` + `mfa_serial`），需在运行前设置环境变量 **`AWS_MFA_CODE`** 为当前 MFA 码，否则会报错。例如：`AWS_MFA_CODE=123456 ./iaws`。**凭证缓存在 `~/.aws/cli/cache/`**（与 AWS CLI 同目录），在有效期内再次运行 iaws 或 SSM 登录无需再次输入 MFA。
-- **与 AWS CLI / kubectl 共享缓存**：iaws 使用 **`~/.aws/cli/cache/`** 存放 assume-role 缓存（文件名带 `iaws_` 前缀，不与 CLI 冲突）。若该目录下已有其他有效缓存（例如你先用 `aws` 输过 MFA），iaws 会优先复用；iaws 写入的缓存也可被同一目录下的其他工具共享。kubectl 访问 EKS 时通过 `aws eks get-token` 使用默认 AWS 凭证链，与 CLI/iaws 共用同一套凭证与缓存目录。
-- **SSM 登录 EC2**：需在本地安装 [Session Manager Plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)，并确保实例已配置 SSM 与相应 IAM 权限。若出现 **「Plugin with name Standard_Stream not found」**，多为 **EC2 实例端** 资源问题：磁盘满、inotify 耗尽或打开文件数超限。可在实例上检查 `df -h`、`/proc/sys/fs/inotify/max_user_watches`，必要时扩容磁盘或提高 `fs.inotify.max_user_watches` / `fs.file-max` 后重启 SSM Agent 或实例；本地请将 Session Manager Plugin 更新至最新版。
+| Service | Features |
+|---------|----------|
+| **EC2** | Instances (Start/Stop/Reboot), VPCs, Subnets, Security Groups, Key Pairs, Volumes, Snapshots, AMIs |
+| **SSM** | Login to EC2 (Session Manager), Parameter list, Get parameter value |
+| **Secrets Manager** | List secrets, Get/Put secret value |
+| **S3** | Bucket list, Object browsing (directory navigation), Download/Upload files |
+| **ACM** | Certificate list, Certificate detail |
+| **Route 53** | Hosted zone list, DNS record list |
+| **EKS** | Cluster list, Cluster detail |
+| **ECR** | Repository list, Image list |
+| **ELB** | Load balancer list and detail |
+| **IAM** | Users, Roles, Policies list and detail |
+| **RDS** | Instance list and detail |
+| **KMS** | Key list and detail |
+| **CloudFront** | Distribution list and detail |
+| **Lambda** | Function list and detail |
+| **Billing** | Monthly cost (6 months), Cost by service, Daily cost (30 days), Top resources, Cost optimization suggestions |
 
-## 使用示例
+## Key Bindings
+
+### Global
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+C` | Quit |
+
+### Menu Views
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move up |
+| `↓` / `j` | Move down |
+| `Enter` | Select |
+| `Esc` | Go back |
+
+### List Views
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move up |
+| `↓` / `j` | Move down |
+| `Enter` | Select / View detail |
+| `Esc` | Clear filter or go back |
+| `/` | Enter filter/search mode |
+| `Tab` | Cycle sort column |
+| `s` | Sort (press once for ascending, again for descending) |
+
+### Filter/Search Mode
+
+| Key | Action |
+|-----|--------|
+| Type | Update filter keyword (remote search debounced at 2s) |
+| `Backspace` | Delete last character |
+| `Enter` | Exit filter mode (triggers search for remote states) |
+| `Esc` | Clear filter and exit filter mode |
+
+### Confirm Dialog
+
+| Key | Action |
+|-----|--------|
+| `y` / `Y` | Confirm |
+| `n` / `Esc` | Cancel |
+
+## Menu Structure
+
+```
+Select Profile
+└── Select Region
+    └── Main Menu
+        ├── EC2
+        │   ├── Instances → Start/Stop/Reboot
+        │   ├── VPCs / Subnets / Security Groups / Key Pairs
+        │   ├── Volumes / Snapshots / AMIs
+        │   └── Back
+        ├── SSM
+        │   ├── SSM Login EC2 → Select instance → Start session
+        │   ├── Parameter list → Get value
+        │   └── Back
+        ├── Secrets Manager
+        │   ├── List / Get / Put
+        │   └── Back
+        ├── S3
+        │   ├── List buckets → Browse objects → Download
+        │   ├── Upload file → Select bucket → Enter path
+        │   └── Back
+        ├── ACM → Certificate list → Detail
+        ├── Route 53 → Hosted zones → DNS records
+        ├── EKS → Cluster list → Detail
+        ├── ECR → Repository list → Image list
+        ├── ELB → Load balancer list → Detail
+        ├── IAM → Users / Roles / Policies → Detail
+        ├── RDS → Instance list → Detail
+        ├── KMS → Key list → Detail
+        ├── CloudFront → Distribution list → Detail
+        ├── Lambda → Function list → Detail
+        ├── Billing
+        │   ├── Monthly cost (6-month trend)
+        │   ├── Cost by service → Select service → Usage type breakdown
+        │   ├── Daily cost (30 days)
+        │   ├── Top resources (top 50 this month)
+        │   ├── Cost optimization (suggestions)
+        │   └── Back
+        └── Quit
+```
+
+## Tables & Sorting
+
+All data list views include **column headers**. Use `Tab` to cycle the sort column and `s` to sort. Numeric values (e.g. `$123.45`, `10GiB`, `128MB`) are automatically detected and sorted numerically rather than lexicographically.
+
+The active sort column is highlighted in the header, with ↑ (ascending) / ↓ (descending) arrows shown after sorting.
+
+## Dependencies & Configuration
+
+- **AWS Credentials**: Uses `~/.aws/config` and `~/.aws/credentials`. On launch, select a **profile** (including default), then a **region**. All subsequent operations use that profile/region.
+- **Assume Role + MFA**: If the selected profile uses MFA (e.g. `role_arn` + `mfa_serial`), set the environment variable **`AWS_MFA_CODE`** to your current MFA code before running. Example: `AWS_MFA_CODE=123456 ./iaws`. **Credentials are cached in `~/.aws/cli/cache/`** (same directory as AWS CLI). Within the validity period, re-running iaws or SSM login does not require re-entering MFA.
+- **Shared cache with AWS CLI / kubectl**: iaws stores assume-role cache in **`~/.aws/cli/cache/`** (filenames prefixed with `iaws_` to avoid conflicts with CLI). If valid cache from other tools exists in this directory, iaws will reuse it; cache written by iaws can also be shared with other tools. kubectl accesses EKS via `aws eks get-token` using the default AWS credential chain, sharing the same credentials and cache directory.
+- **SSM Login to EC2**: Requires [Session Manager Plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed locally, and instances must have SSM configured with appropriate IAM permissions. If you see **"Plugin with name Standard_Stream not found"**, this is typically a resource issue on the **EC2 instance side**: disk full, inotify exhausted, or file descriptor limits exceeded. Check `df -h` and `/proc/sys/fs/inotify/max_user_watches` on the instance; expand disk or increase `fs.inotify.max_user_watches` / `fs.file-max` then restart SSM Agent or the instance. Locally, update Session Manager Plugin to the latest version.
+
+## Usage
 
 ```bash
 ./iaws
-# 1) 选择 profile（如 default）
-# 2) 选择 region（如 us-east-1）
-# 3) 主菜单选择 EC2 / SSM / Secrets Manager / S3
-# 4) 在列表中可用键盘输入关键词过滤，↑/k ↓/j 移动，Enter 确认，Esc/q 返回
-# 5) 危险操作（如 Stop 实例、Put Secret）会二次确认 (y/n)
+# 1) Select profile (e.g. default)
+# 2) Select region (e.g. us-east-1)
+# 3) Choose a service from the main menu (EC2 / SSM / S3 / Billing etc.)
+# 4) Press / to enter filter mode, type keywords to filter; ↑/k ↓/j to navigate, Enter to select, Esc to go back
+# 5) Press Tab to cycle sort column, press s to sort
+# 6) Destructive operations (e.g. Stop instance, Put Secret) require confirmation (y/n)
 ```
 
-## 主要特性
+With an MFA-protected profile:
 
-1. **全交互**：直接执行 `iaws`，所有参数与选项通过选择完成，无需手写长命令。
-2. **Terminal UI**：通过选择或输入关键词过滤选项，交互式执行常用命令，例如：
-   - 查看 EC2 信息（实例、VPC、子网、安全组等）
-   - SSM 登录 EC2
-   - 查看 Secrets Manager、Get/Put 单条 value
-   - S3 桶与对象列表、下载/上传
-3. **覆盖范围**：以最常用 AWS 服务的常用查看操作为主，以及少量输入很少的写操作（如 EC2 启停、Secret put、S3 单文件上传）。完整枚举见需求文档。
-4. **认证**：自动读取 AWS config，支持选择 profile（含 default）。
-5. **测试**：使用 LocalStack 做功能测试，不依赖真实 AWS 账号即可验证主流程。
+```bash
+AWS_MFA_CODE=123456 ./iaws
+```
 
-## 文档
+## Testing with LocalStack
 
-- **[需求说明（完善版）](docs/REQUIREMENTS.md)**：结构化需求、常用查看/写操作枚举、技术选型建议。
-- **[实现提示词](docs/PROMPT.md)**：可直接用于开发或 AI 实现的完整提示词（目标、功能、交互、技术约束、交付与验收）。
+Core paths (EC2 list, SSM list/get, Secrets Manager list/get/put, S3 list/get, etc.) can be verified without a real AWS account.
 
-## 第一期范围
-
-EC2、SSM、Secrets Manager、S3 的常用查看与上述轻量写操作；后续可扩展 RDS、Lambda、ECS、EKS、IAM、CloudWatch 等。
-
-## 使用 LocalStack 做功能测试
-
-不依赖真实 AWS 账号即可验证 EC2 list、SSM list/get、Secrets Manager list/get/put、S3 list/get 等核心路径。
-
-1. **启动 LocalStack**（例如用 Docker）：
+1. **Start LocalStack** (e.g. with Docker):
 
 ```bash
 docker run --rm -d -p 4566:4566 -p 4510-4559:4510-4559 localstack/localstack
 ```
 
-2. **设置环境变量并运行 iaws**：
+2. **Set environment variables and run iaws**:
 
 ```bash
 export AWS_ACCESS_KEY_ID=test
@@ -70,4 +169,10 @@ export AWS_ENDPOINT_URL=http://localhost:4566
 ./iaws
 ```
 
-3. 选择 profile（如 default）、region（如 `us-east-1`），即可在 LocalStack 上执行列表/获取等操作。如需预先写入测试数据，可使用 `awslocal` 或 AWS CLI 指向 `http://localhost:4566` 创建 EC2、SSM 参数、Secrets、S3 桶等后再在 iaws 中验证。
+3. Select a profile (e.g. default) and region (e.g. `us-east-1`) to operate against LocalStack. To pre-populate test data, use `awslocal` or AWS CLI pointed at `http://localhost:4566` to create EC2 instances, SSM parameters, Secrets, S3 buckets, etc., then verify in iaws.
+
+## Tech Stack
+
+- **Language**: Go
+- **TUI Framework**: [Bubble Tea](https://github.com/charmbracelet/bubbletea) + [Lip Gloss](https://github.com/charmbracelet/lipgloss)
+- **AWS SDK**: [aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2)

@@ -36,10 +36,10 @@ func TestLoad_WithEndpointURL(t *testing.T) {
 		EndpointURL: endpoint,
 	}
 
-	// Load 可能因无凭证失败，但若成功则需校验自定义 endpoint 已设置
+	// Load may fail without credentials, but if successful we verify the custom endpoint is set
 	awsCfg, err := Load(ctx, opts)
 	if err != nil {
-		// 无 ~/.aws/credentials 或权限不足时跳过
+		// skip when ~/.aws/credentials is missing or insufficient permissions
 		t.Skipf("Load failed (no creds?): %v", err)
 		return
 	}
@@ -67,7 +67,7 @@ func TestLoad_EndpointFromEnv(t *testing.T) {
 	_ = os.Setenv(envKey, want)
 	ctx := context.Background()
 	opts := LoadOptions{Profile: "default", Region: "us-east-1"}
-	// 不传 EndpointURL，应从环境变量读取
+	// no EndpointURL passed; should be read from env var
 	awsCfg, err := Load(ctx, opts)
 	if err != nil {
 		t.Skipf("Load failed: %v", err)

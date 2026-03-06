@@ -17,7 +17,7 @@ func NewSecrets(cfg aws.Config) *SecretsClient {
 	return &SecretsClient{client: secretsmanager.NewFromConfig(cfg)}
 }
 
-// SecretItem for list display.
+// SecretItem holds data for list display.
 type SecretItem struct {
 	Name string
 	ARN  string

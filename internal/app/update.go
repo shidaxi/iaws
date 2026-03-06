@@ -28,7 +28,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		// List states: dispatch to filter-mode or normal key handler
+		if msg.String() == "q" && !m.filterMode && m.kind != stateSecretPut && m.kind != stateS3PutObject {
+			return m, tea.Quit
+		}
+		// list state: dispatch to filter mode or normal key handler
 		if m.isListState() {
 			if m.filterMode {
 				return m.handleFilterModeKey(msg)
@@ -168,8 +171,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.menuSelected = 0
 		return m, nil
 
-	// handle search results clearing searching flag
-	// --- paginated list (generic) ---
+	// handle search results, clear search markers
+	// --- paged list (generic) ---
 	case pagedListMsg:
 		m.searching = false
 		if msg.append {
@@ -200,7 +203,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// --- paginated instances (EC2/SSM login) ---
+	// --- paged instances (EC2/SSM login) ---
 	case pagedInstancesMsg:
 		m.searching = false
 		entries := make([]listEntry, len(msg.items))
@@ -238,7 +241,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// --- Route53 record sets (two tokens) ---
+	// --- Route53 record sets (dual-token pagination) ---
 	case r53RecordsMsg:
 		m.searching = false
 		if msg.append {
@@ -270,7 +273,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	// --- legacy non-paged messages (VPC, Subnet, SG, KeyPair, Volume, AMI, S3 buckets) ---
+	// --- non-paged messages (VPC, subnet, SG, key pair, volume, AMI, S3 bucket) ---
 	case listLoadedMsg:
 		m.searching = false
 		m.items = msg.items
@@ -617,8 +620,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // visibleItems returns items for display.
-// For remote-searchable states, no local filtering — items are already filtered server-side.
-// For local-filter states, apply fuzzy match.
+// In remote search states, no local filtering is applied — items are already server-filtered.
+// In local filter states, fuzzy matching is applied.
 func (m *model) visibleItems() []listEntry {
 	if m.isRemoteSearchState() {
 		return m.items
@@ -689,15 +692,15 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			m.menuItems = []string{"List hosted zones", "Back"}
 			m.menuSelected = 0
 			return m, nil
-		case 6: // EKS — direct to cluster list
+		case 6: // EKS — go directly to cluster list
 			m.resetPage()
 			m.detailMap = nil
 			return m, eksClusterListCmd(m, nil, false, "")
-		case 7: // ECR — direct to repo list
+		case 7: // ECR — go directly to repository list
 			m.resetPage()
 			m.detailMap = nil
 			return m, ecrRepoListCmd(m, nil, false, "")
-		case 8: // ELB — direct to LB list
+		case 8: // ELB — go directly to load balancer list
 			m.resetPage()
 			m.detailMap = nil
 			return m, elbListCmd(m, nil, false, "")

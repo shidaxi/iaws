@@ -74,14 +74,13 @@ func (c *SSMClient) GetParameter(ctx context.Context, name string) (string, erro
 }
 
 // BuildSessionCmd builds an *exec.Cmd for `aws ssm start-session`.
-// If creds is provided, credentials are injected via env vars so the CLI
-// does not re-prompt for MFA.
+// If creds are provided, credentials are injected via environment variables to avoid CLI re-prompting for MFA.
 // Returns an error if session-manager-plugin is not installed.
 func (c *SSMClient) BuildSessionCmd(creds *aws.Credentials, instanceID string) (*exec.Cmd, error) {
 	ilog.Info("SSM: building session cmd for instance=%s profile=%s region=%s", instanceID, c.profile, c.region)
 	if _, err := exec.LookPath("session-manager-plugin"); err != nil {
 		ilog.Error("SSM: session-manager-plugin not found in PATH")
-		return nil, fmt.Errorf("未找到 session-manager-plugin，请先安装：https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html")
+		return nil, fmt.Errorf("session-manager-plugin not found, please install: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html")
 	}
 
 	args := []string{"ssm", "start-session", "--target", instanceID}

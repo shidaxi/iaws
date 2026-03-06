@@ -11,7 +11,7 @@ import (
 	ilog "github.com/shidaxi/iaws/internal/log"
 )
 
-// endpointResolver implements custom endpoint (e.g. LocalStack) for all services.
+// endpointResolver implements a custom endpoint for all services (e.g. LocalStack).
 type endpointResolver struct {
 	url string
 }
@@ -20,18 +20,17 @@ func (e *endpointResolver) ResolveEndpoint(service, region string, options ...in
 	return aws.Endpoint{URL: e.url}, nil
 }
 
-// LoadOptions holds profile, region and optional custom endpoint (e.g. LocalStack).
+// LoadOptions holds profile, region, and an optional custom endpoint (e.g. LocalStack).
 type LoadOptions struct {
 	Profile string
 	Region  string
-	// EndpointURL if set (e.g. http://localhost:4566) is used for all services (LocalStack).
+	// EndpointURL, when set (e.g. http://localhost:4566), is used for all services (LocalStack).
 	EndpointURL string
-	// MFATokenProvider returns the MFA code when assuming a role with MFA. If nil, MFA code
-	// is read from environment variable AWS_MFA_CODE.
+	// MFATokenProvider returns the MFA code when assume role requires MFA. If nil, reads from AWS_MFA_CODE env var.
 	MFATokenProvider func() (string, error)
 }
 
-// assumeRoleTokenProvider 返回用于 assume role MFA 的 TokenProvider；优先使用 opts.MFATokenProvider，否则从环境变量 AWS_MFA_CODE 读取。
+// assumeRoleTokenProvider returns a TokenProvider for assume role MFA; prefers opts.MFATokenProvider, otherwise reads from AWS_MFA_CODE env var.
 func assumeRoleTokenProvider(opts LoadOptions) func(*stscreds.AssumeRoleOptions) {
 	return func(o *stscreds.AssumeRoleOptions) {
 		o.TokenProvider = func() (string, error) {
@@ -46,16 +45,16 @@ func assumeRoleTokenProvider(opts LoadOptions) func(*stscreds.AssumeRoleOptions)
 	}
 }
 
-// AWS holds loaded config and derived options.
+// AWS holds the loaded config and derived options.
 type AWS struct {
 	Config aws.Config
 }
 
-// Load loads AWS config from env/files using the given profile and region.
-// If EndpointURL is set (e.g. from AWS_ENDPOINT_URL), it is used as custom endpoint for LocalStack.
-// If the profile uses assume role with MFA, the MFA code is read from environment variable
-// AWS_MFA_CODE (or the optional MFATokenProvider in LoadOptions). Set AWS_MFA_CODE before
-// running iaws when using an MFA-protected role.
+// Load loads AWS config from environment/files with the given profile and region.
+// If EndpointURL is set (e.g. from AWS_ENDPOINT_URL), it is used as a custom endpoint for LocalStack.
+// If the profile uses assume role with MFA, the MFA code is read from the AWS_MFA_CODE env var
+// (or the optional MFATokenProvider in LoadOptions). When using MFA-protected roles,
+// set AWS_MFA_CODE before running iaws.
 func Load(ctx context.Context, opts LoadOptions) (*AWS, error) {
 	ilog.Info("loading AWS config: profile=%q region=%q", opts.Profile, opts.Region)
 	var cfgOpts []func(*config.LoadOptions) error
@@ -65,7 +64,7 @@ func Load(ctx context.Context, opts LoadOptions) (*AWS, error) {
 	if opts.Region != "" {
 		cfgOpts = append(cfgOpts, config.WithRegion(opts.Region))
 	}
-	// 为 assume role + MFA 提供 TokenProvider，避免 "AssumeRoleTokenProvider session option not set" 错误
+	// provide TokenProvider for assume role + MFA to avoid "AssumeRoleTokenProvider session option not set" error
 	cfgOpts = append(cfgOpts, config.WithAssumeRoleCredentialOptions(assumeRoleTokenProvider(opts)))
 	cfg, err := config.LoadDefaultConfig(ctx, cfgOpts...)
 	if err != nil {
@@ -80,7 +79,7 @@ func Load(ctx context.Context, opts LoadOptions) (*AWS, error) {
 		ilog.Info("using custom endpoint: %s", endpoint)
 		cfg.EndpointResolverWithOptions = &endpointResolver{url: endpoint}
 	}
-	// 磁盘缓存 assume-role 凭证，一次 MFA 后在有效期内复用，无需每次输入
+	// disk-cache assume-role credentials; reuse within validity after one MFA, no re-entry needed
 	cfg.Credentials = newFileCacheProvider(cfg.Credentials, opts.Profile, cfg.Region)
 	ilog.Info("AWS config loaded: region=%s", cfg.Region)
 	return &AWS{Config: cfg}, nil

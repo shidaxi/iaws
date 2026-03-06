@@ -71,7 +71,7 @@ func fmtDollarF(amount float64) string {
 	return fmt.Sprintf("$%.2f", amount)
 }
 
-// ─── Monthly Cost ──────────────────────────────────────────────────────────────
+// ─── monthly cost ──────────────────────────────────────────────────────────────
 
 func (c *BillingClient) GetMonthlyCost(ctx context.Context, months int) ([]MonthlyCostItem, error) {
 	ilog.Info("Billing: GetMonthlyCost months=%d", months)
@@ -108,7 +108,7 @@ func (c *BillingClient) GetMonthlyCost(ctx context.Context, months int) ([]Month
 	return items, nil
 }
 
-// ─── Cost by Service ───────────────────────────────────────────────────────────
+// ─── cost by service ───────────────────────────────────────────────────────────
 
 func (c *BillingClient) GetCostByService(ctx context.Context) ([]ServiceCostItem, error) {
 	ilog.Info("Billing: GetCostByService")
@@ -163,7 +163,7 @@ func (c *BillingClient) GetCostByService(ctx context.Context) ([]ServiceCostItem
 	return items, nil
 }
 
-// ─── Service Cost Detail (by usage type) ───────────────────────────────────────
+// ─── service cost detail (by usage type) ───────────────────────────────────────
 
 func (c *BillingClient) GetServiceCostDetail(ctx context.Context, serviceName string, limit int) ([]ServiceCostItem, error) {
 	ilog.Info("Billing: GetServiceCostDetail service=%q limit=%d", serviceName, limit)
@@ -227,7 +227,7 @@ func (c *BillingClient) GetServiceCostDetail(ctx context.Context, serviceName st
 	return items, nil
 }
 
-// ─── Daily Cost ────────────────────────────────────────────────────────────────
+// ─── daily cost ────────────────────────────────────────────────────────────────
 
 func (c *BillingClient) GetDailyCost(ctx context.Context, days int) ([]DailyCostItem, error) {
 	ilog.Info("Billing: GetDailyCost days=%d", days)
@@ -264,7 +264,7 @@ func (c *BillingClient) GetDailyCost(ctx context.Context, days int) ([]DailyCost
 	return items, nil
 }
 
-// ─── Top Resources ─────────────────────────────────────────────────────────────
+// ─── top resources ─────────────────────────────────────────────────────────────
 
 func (c *BillingClient) GetTopResources(ctx context.Context, limit int) ([]ResourceCostItem, error) {
 	ilog.Info("Billing: GetTopResources limit=%d", limit)
@@ -360,7 +360,7 @@ func (c *BillingClient) GetTopResources(ctx context.Context, limit int) ([]Resou
 	return items, nil
 }
 
-// ─── Rightsizing Recommendations ───────────────────────────────────────────────
+// ─── rightsizing recommendations ───────────────────────────────────────────────
 
 func (c *BillingClient) GetRightsizingRecommendations(ctx context.Context) ([]RightsizingItem, error) {
 	ilog.Info("Billing: GetRightsizingRecommendations")
@@ -433,7 +433,7 @@ func (c *BillingClient) GetRightsizingRecommendations(ctx context.Context) ([]Ri
 	return items, nil
 }
 
-// ─── Format Functions ──────────────────────────────────────────────────────────
+// ─── formatting functions ──────────────────────────────────────────────────────
 
 func FormatMonthlyCostDetail(items []MonthlyCostItem) string {
 	colMonth := len("Month")
@@ -512,7 +512,7 @@ func FormatDailyCostDetail(items []DailyCostItem) string {
 func FormatOptimizationReport(monthly []MonthlyCostItem, rightsizing []RightsizingItem, topRes []ResourceCostItem) string {
 	var b strings.Builder
 
-	// ── Monthly Trend ──
+	// ── monthly trend ──
 	b.WriteString("[Monthly Trend]\n")
 	colM := len("Month")
 	colC := len("Cost")
@@ -551,9 +551,9 @@ func FormatOptimizationReport(monthly []MonthlyCostItem, rightsizing []Rightsizi
 		fmt.Fprintf(&b, "%-*s  %-*s  %-*s\n", colM, ms[i], colC, ds[i], colG, gs[i])
 	}
 
-	// ── Top 10 Resources ──
+	// ── top 10 resources ──
 	if len(topRes) > 0 {
-		b.WriteString("\n[Top Cost Resources]\n")
+		b.WriteString("\n[Top Resource Costs]\n")
 		n := len(topRes)
 		if n > 10 {
 			n = 10
@@ -596,15 +596,15 @@ func FormatOptimizationReport(monthly []MonthlyCostItem, rightsizing []Rightsizi
 			top3 := topRes[0].Amount + topRes[1].Amount + topRes[2].Amount
 			pct := top3 / totalTop * 100
 			if pct > 50 {
-				fmt.Fprintf(&b, "\n* Top 3 resources account for %.0f%% of total resource cost — consider reviewing them.\n", pct)
+				fmt.Fprintf(&b, "\n* Top 3 resources account for %.0f%% of total resource costs — consider focusing on these.\n", pct)
 			}
 		}
 	}
 
-	// ── EC2 Rightsizing ──
+	// ── EC2 rightsizing ──
 	b.WriteString("\n[EC2 Rightsizing Recommendations]\n")
 	if len(rightsizing) == 0 {
-		b.WriteString("No recommendations — all instances appear right-sized.\n")
+		b.WriteString("No recommendations — all instances are properly sized.\n")
 	} else {
 		colID := len("Instance")
 		colNm := 0
@@ -667,7 +667,7 @@ func FormatOptimizationReport(monthly []MonthlyCostItem, rightsizing []Rightsizi
 			totalSavings += s
 		}
 		if totalSavings > 0 {
-			fmt.Fprintf(&b, "\nTotal estimated savings: %s/mo\n", fmtDollarF(totalSavings))
+			fmt.Fprintf(&b, "\nEstimated monthly savings: %s\n", fmtDollarF(totalSavings))
 		}
 		// show reason summary
 		reasonCount := make(map[string]int)
@@ -677,7 +677,7 @@ func FormatOptimizationReport(monthly []MonthlyCostItem, rightsizing []Rightsizi
 			}
 		}
 		if len(reasonCount) > 0 {
-			b.WriteString("\nTop findings:\n")
+			b.WriteString("\nKey findings:\n")
 			type rc struct {
 				reason string
 				count  int
@@ -693,12 +693,12 @@ func FormatOptimizationReport(monthly []MonthlyCostItem, rightsizing []Rightsizi
 		}
 	}
 
-	// ── General Tips ──
+	// ── general tips ──
 	b.WriteString("\n[Optimization Tips]\n")
-	b.WriteString("- For stable workloads, consider Reserved Instances or Savings Plans.\n")
-	b.WriteString("- Review unused EBS volumes, idle ELBs, and old snapshots.\n")
+	b.WriteString("- For steady workloads, consider Reserved Instances or Savings Plans.\n")
+	b.WriteString("- Check for unused EBS volumes, idle ELBs, and expired snapshots.\n")
 	b.WriteString("- Enable S3 Lifecycle policies for infrequently accessed data.\n")
-	b.WriteString("- Use S3 Intelligent-Tiering for unpredictable access patterns.\n")
+	b.WriteString("- Use S3 Intelligent-Tiering for data with unpredictable access patterns.\n")
 	b.WriteString("- Check for idle NAT Gateways and unused Elastic IPs.\n")
 
 	return b.String()
@@ -740,16 +740,16 @@ func ShortenService(name string) string {
 
 func humanizeReason(code string) string {
 	m := map[string]string{
-		"CPU_OVER_PROVISIONED":              "CPU over-provisioned",
-		"MEMORY_OVER_PROVISIONED":           "Memory over-provisioned",
-		"NETWORK_BANDWIDTH_OVER_PROVISIONED": "Network over-provisioned",
-		"DISK_IOPS_OVER_PROVISIONED":        "Disk IOPS over-provisioned",
-		"DISK_THROUGHPUT_OVER_PROVISIONED":   "Disk throughput over-provisioned",
-		"CPU_UNDER_PROVISIONED":             "CPU under-provisioned",
-		"MEMORY_UNDER_PROVISIONED":          "Memory under-provisioned",
-		"NETWORK_BANDWIDTH_UNDER_PROVISIONED": "Network under-provisioned",
-		"DISK_IOPS_UNDER_PROVISIONED":       "Disk IOPS under-provisioned",
-		"DISK_THROUGHPUT_UNDER_PROVISIONED":  "Disk throughput under-provisioned",
+		"CPU_OVER_PROVISIONED":                 "CPU over-provisioned",
+		"MEMORY_OVER_PROVISIONED":              "Memory over-provisioned",
+		"NETWORK_BANDWIDTH_OVER_PROVISIONED":   "Network bandwidth over-provisioned",
+		"DISK_IOPS_OVER_PROVISIONED":           "Disk IOPS over-provisioned",
+		"DISK_THROUGHPUT_OVER_PROVISIONED":     "Disk throughput over-provisioned",
+		"CPU_UNDER_PROVISIONED":                "CPU under-provisioned",
+		"MEMORY_UNDER_PROVISIONED":             "Memory under-provisioned",
+		"NETWORK_BANDWIDTH_UNDER_PROVISIONED":  "Network bandwidth under-provisioned",
+		"DISK_IOPS_UNDER_PROVISIONED":          "Disk IOPS under-provisioned",
+		"DISK_THROUGHPUT_UNDER_PROVISIONED":    "Disk throughput under-provisioned",
 	}
 	if s, ok := m[code]; ok {
 		return s

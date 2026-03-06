@@ -17,7 +17,7 @@ func NewEC2(cfg aws.Config) *EC2Client {
 	return &EC2Client{client: ec2.NewFromConfig(cfg)}
 }
 
-// InstanceItem for list display.
+// InstanceItem holds data for list display.
 type InstanceItem struct {
 	ID       string
 	State    string
@@ -88,7 +88,7 @@ func (c *EC2Client) RebootInstance(ctx context.Context, instanceID string) error
 	return err
 }
 
-// VPCItem for list display.
+// VPCItem holds data for list display.
 type VPCItem struct {
 	ID        string
 	CIDR      string
@@ -120,7 +120,7 @@ func (c *EC2Client) ListVPCs(ctx context.Context) ([]VPCItem, error) {
 	return items, nil
 }
 
-// SubnetItem for list display.
+// SubnetItem holds data for list display.
 type SubnetItem struct {
 	ID     string
 	VPCID  string
@@ -147,7 +147,7 @@ func (c *EC2Client) ListSubnets(ctx context.Context) ([]SubnetItem, error) {
 	return items, nil
 }
 
-// SGItem for list display.
+// SGItem holds data for list display.
 type SGItem struct {
 	ID   string
 	Name string
@@ -170,7 +170,7 @@ func (c *EC2Client) ListSecurityGroups(ctx context.Context) ([]SGItem, error) {
 	return items, nil
 }
 
-// KeyPairItem for list display.
+// KeyPairItem holds data for list display.
 type KeyPairItem struct {
 	Name   string
 	KeyID  string
@@ -191,7 +191,7 @@ func (c *EC2Client) ListKeyPairs(ctx context.Context) ([]KeyPairItem, error) {
 	return items, nil
 }
 
-// VolumeItem for list display.
+// VolumeItem holds data for list display.
 type VolumeItem struct {
 	ID     string
 	Size   int32
@@ -222,7 +222,7 @@ func (c *EC2Client) ListVolumes(ctx context.Context) ([]VolumeItem, error) {
 	return items, nil
 }
 
-// SnapshotItem for list display.
+// SnapshotItem holds data for list display.
 type SnapshotItem struct {
 	ID          string
 	VolumeID    string
@@ -268,7 +268,7 @@ func (c *EC2Client) ListSnapshots(ctx context.Context) ([]SnapshotItem, error) {
 	return items, nil
 }
 
-// AMIItem for list display.
+// AMIItem holds data for list display.
 type AMIItem struct {
 	ID   string
 	Name string
@@ -302,7 +302,7 @@ func (c *EC2Client) ListAMIs(ctx context.Context, self bool) ([]AMIItem, error) 
 	return items, nil
 }
 
-// InstanceIDForSSM returns instance ID; SSM Session Manager requires instances to be in running state and have SSM agent.
+// InstanceIDForSSM returns the instance ID; SSM Session Manager requires the instance to be running with SSM Agent installed.
 func (c *EC2Client) InstanceIDForSSM(ctx context.Context, instanceID string) (string, error) {
 	return instanceID, nil
 }

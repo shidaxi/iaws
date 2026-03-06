@@ -63,15 +63,15 @@ const (
 	stateBillingDailyCost
 	stateBillingTopResources
 	stateConfirm
-	stateMessage // show error or success then back
+	stateMessage // show error or success then return
 )
 
 const loadMoreID = "__load_more__"
 
 type listEntry struct {
 	Title string
-	ID    string // instance id, secret name, bucket name, etc.
-	IsDir bool   // for S3 prefix
+	ID    string // instance ID, secret name, bucket name, etc.
+	IsDir bool   // S3 directory prefix
 }
 
 // Model is the root Bubble Tea model.
@@ -84,18 +84,18 @@ type Model struct {
 	profile string
 	region  string
 
-	// list state: items and filter
+	// list state: entries and filter
 	items      []listEntry
 	filter     string
-	filterMode bool // true = typing into filter input
+	filterMode bool // true = actively typing filter keywords
 	selected   int
-	// 从 region 返回 profile 时恢复的 profile 列表
+	// saved profile items restored when going back from region to profile
 	savedProfileItems []listEntry
-	// 从 main menu 返回 region 时恢复的 region 列表
+	// saved region items restored when going back from main menu to region
 	savedRegionItems []listEntry
-	// for EC2 instance list we need full InstanceItem for display; reuse items as title, ID as instance id
+	// EC2 instance list needs full InstanceItem for display; reuses items title, ID is instance ID
 	ec2Instances []services.InstanceItem
-	// for EC2 volume/snapshot data storage
+	// EC2 volume/snapshot raw data
 	ec2Volumes   []services.VolumeItem
 	ec2Snapshots []services.SnapshotItem
 
@@ -103,9 +103,9 @@ type Model struct {
 	tableColumns []columnDef
 	sortColIdx   int  // highlighted column (-1 = none)
 	sortDesc     bool // sort direction
-	sorted       bool // true after 's' pressed (sort applied)
+	sorted       bool // true after pressing 's' (actively sorted)
 
-	// menu: choices and selected index
+	// menu: items and selected index
 	menuItems   []string
 	menuSelected int
 
@@ -113,7 +113,7 @@ type Model struct {
 	confirmMsg      string
 	confirmAction   string
 	confirmTarget   string
-	confirmData     string // extra data e.g. secret value
+	confirmData     string // extra data, e.g. secret value
 	confirmBackState stateKind
 
 	// message (error/success)
@@ -121,9 +121,9 @@ type Model struct {
 	msgErr               bool
 	prevStateAfterMessage stateKind
 
-	// SSM: param name for get
+	// SSM: parameter name for get
 	ssmParamName string
-	// Secrets: name for get/put
+	// Secrets: secret name for get/put
 	secretName   string
 	secretValue  string
 	// S3: bucket, prefix, key, local path
@@ -131,38 +131,38 @@ type Model struct {
 	s3Prefix    string
 	s3Key       string
 	s3LocalPath string
-	s3PutKey    string   // for upload flow
+	s3PutKey    string   // used during upload flow
 	s3PutStep   int      // 0=key, 1=path
 
-	// Secrets: when in list, did we come from "get" or "put"
+	// Secrets: whether list was entered via "get" or "put"
 	prevSecretAction string
-	// Optional text input for put secret value
+	// optional text input for setting secret value
 	inputValue string
 
-	// S3 menu: true when we chose "Upload file" and are selecting bucket
+	// S3 menu: true when selecting bucket after choosing "Upload file"
 	s3MenuUpload bool
 
 	// server-side pagination
-	pageToken string // next-page token for current list
+	pageToken string // next page token for current list
 	hasMore   bool   // whether there are more pages
 
-	// remote search (debounce)
-	searchSeq     int  // incremented on each keystroke; used to discard stale ticks
-	searchPending bool // filter changed since last search; Enter will trigger search
-	searching     bool // a search request is in flight
+	// remote search (debounced)
+	searchSeq     int  // incremented per keystroke; used to discard stale timer callbacks
+	searchPending bool // filter changed since last search; Enter triggers search
+	searching     bool // search request in progress
 
 	// Route53
 	r53ZoneID          string
 	r53ZoneName        string
 	r53RecordNextType  *string
 
-	// ECR: selected repo for image listing
+	// ECR: selected repository for image list
 	ecrRepoName string
 
-	// detail cache: keyed by entry.ID, holds formatted detail strings
+	// detail cache: keyed by entry.ID, stores formatted detail strings
 	detailMap map[string]string
 
-	// services (created after aws loaded)
+	// service clients (created after AWS config loaded)
 	ec2       *services.EC2Client
 	ssm       *services.SSMClient
 	secrets   *services.SecretsClient
@@ -180,7 +180,7 @@ type Model struct {
 	billingSvc *services.BillingClient
 }
 
-// model is an alias for backward compatibility in this package.
+// model is a backward-compatible alias within this package.
 type model = Model
 
 // New creates a new Model with the given context.
@@ -260,7 +260,7 @@ func billingMenuItems() []string {
 	}
 }
 
-// ─── column-based table header & sorting ────────────────────────────────────
+// ─── column-based table headers and sorting ────────────────────────────────────
 
 type columnDef struct {
 	Name  string
@@ -322,7 +322,7 @@ func (m *model) getTableColumns() []columnDef {
 
 func (m *model) resetSort() {
 	m.sortColIdx = -1
-	m.sortDesc = true // so first 's' toggles to false = ascending
+	m.sortDesc = true // so the first 's' press toggles to false = ascending
 	m.sorted = false
 	m.tableColumns = nil
 }

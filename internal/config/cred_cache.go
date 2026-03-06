@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	// 与 AWS CLI 共用缓存目录，便于与 aws / kubectl（EKS 用同一套凭证链）共享认证
+	// shared cache dir with AWS CLI, enabling credential sharing with aws / kubectl (EKS uses the same credential chain)
 	credCacheDir = ".aws/cli/cache"
-	credCacheTTL = 5 * time.Minute // 临近过期时提前刷新
-	iawsPrefix   = "iaws_"          // 我们写的文件名前缀，避免与 CLI 的 hash 文件名冲突
+	credCacheTTL = 5 * time.Minute // refresh ahead of expiry
+	iawsPrefix   = "iaws_"          // filename prefix for our files, to avoid conflicts with CLI hash filenames
 )
 
 type cachedCreds struct {
@@ -26,7 +26,7 @@ type cachedCreds struct {
 	Expiration      time.Time `json:"Expiration"`
 }
 
-// fileCacheProvider 包装一个 CredentialsProvider，优先从磁盘缓存读取 assume-role 凭证，未命中或过期再调底层并写回缓存。
+// fileCacheProvider wraps a CredentialsProvider, preferring disk-cached assume-role credentials; on miss or expiry, calls the inner provider and writes back to cache.
 type fileCacheProvider struct {
 	inner   aws.CredentialsProvider
 	profile string
@@ -74,13 +74,13 @@ func (p *fileCacheProvider) cachePath() string {
 }
 
 func (p *fileCacheProvider) loadCache() (aws.Credentials, bool) {
-	// 1) 先读我们自己的缓存（iaws_<profile>_<region>.json）
+	// 1) first try our own cache (iaws_<profile>_<region>.json)
 	path := p.cachePath()
 	if creds, ok := p.loadCacheFile(path); ok {
 		ilog.Debug("cred cache: loaded from own file %s", path)
 		return creds, true
 	}
-	// 2) 再尝试 iaws_<profile>_.json（region 为空时可能写成的文件名）
+	// 2) then try iaws_<profile>_.json (filename written when region is empty)
 	if p.region != "" {
 		pathNoRegion := filepath.Join(p.cacheDir(), iawsPrefix+strings.ReplaceAll(strings.ReplaceAll(p.profile, "/", "_"), ":", "_")+".json")
 		if creds, ok := p.loadCacheFile(pathNoRegion); ok {
@@ -88,7 +88,7 @@ func (p *fileCacheProvider) loadCache() (aws.Credentials, bool) {
 			return creds, true
 		}
 	}
-	// 3) 未命中时尝试读取同目录下其他缓存（如 AWS CLI 写入的），任一有效即复用
+	// 3) on miss, try other cache files in the same directory (e.g. written by AWS CLI); reuse any valid one
 	dir := p.cacheDir()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -134,19 +134,19 @@ func (p *fileCacheProvider) loadCacheFile(path string) (aws.Credentials, bool) {
 	}, true
 }
 
-// parseCredsJSON 解析多种常见 JSON 格式（iaws、credential_process、CLI 缓存等）
+// parseCredsJSON parses multiple common JSON formats (iaws, credential_process, CLI cache, etc.)
 func parseCredsJSON(b []byte) (c cachedCreds, ok bool) {
-	// 1) 直接格式：AccessKeyId, SecretAccessKey, SessionToken, Expiration
+	// 1) direct format: AccessKeyId, SecretAccessKey, SessionToken, Expiration
 	if json.Unmarshal(b, &c) == nil && c.AccessKeyID != "" {
 		return c, true
 	}
-	// 2) 顶层 Version + 各字段，或 Credentials 嵌套
+	// 2) top-level Version + fields, or nested Credentials
 	var wrapper struct {
 		Version        int    `json:"Version"`
 		AccessKeyId    string `json:"AccessKeyId"`
 		SecretAccessKey string `json:"SecretAccessKey"`
 		SessionToken   string `json:"SessionToken"`
-		Expiration     string `json:"Expiration"` // 常见为 ISO8601 字符串
+		Expiration     string `json:"Expiration"` // commonly ISO8601 string
 		Credentials    *struct {
 			AccessKeyId    string `json:"AccessKeyId"`
 			SecretAccessKey string `json:"SecretAccessKey"`
@@ -169,14 +169,14 @@ func parseCredsJSON(b []byte) (c cachedCreds, ok bool) {
 		c.Expiration, _ = parseExpiration(wrapper.Expiration)
 	}
 	if c.AccessKeyID == "" || c.SecretAccessKey == "" {
-		// 3) 尝试小写+下划线键名（部分 CLI/botocore 格式）
+		// 3) try lowercase+underscore key names (some CLI/botocore formats)
 		c, ok = parseCredsJSONMap(b)
 		return c, ok
 	}
 	return c, true
 }
 
-// parseCredsJSONMap 从任意 JSON 中按常见键名提取凭证（含嵌套）
+// parseCredsJSONMap extracts credentials from arbitrary JSON by common key names (including nested)
 func parseCredsJSONMap(b []byte) (c cachedCreds, ok bool) {
 	var m map[string]interface{}
 	if json.Unmarshal(b, &m) != nil {

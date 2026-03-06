@@ -6,8 +6,8 @@ import (
 	"github.com/charmbracelet/bubbletea"
 )
 
-// handleListKey handles keys when NOT in filter mode:
-// / = enter filter mode, tab = cycle column, s = toggle sort,
+// handleListKey handles key presses in non-filter mode:
+// / = enter filter mode, tab = cycle sort column, s = toggle sort,
 // up/down/enter/esc = navigation.
 func (m *model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -67,8 +67,8 @@ func (m *model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleFilterModeKey handles keys when in filter mode:
-// typing updates filter, Enter exits, Esc clears + exits.
+// handleFilterModeKey handles key presses in filter mode:
+// typing updates filter, Enter exits, Esc clears and exits.
 func (m *model) handleFilterModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case msg.String() == "enter":

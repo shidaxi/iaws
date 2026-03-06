@@ -9,14 +9,14 @@ import (
 	"strings"
 )
 
-// DefaultRegions is a common list for region selection.
+// DefaultRegions is a list of commonly used regions.
 var DefaultRegions = []string{
 	"us-east-1", "us-east-2", "us-west-1", "us-west-2",
 	"eu-west-1", "eu-west-2", "eu-central-1", "ap-northeast-1",
 	"ap-northeast-2", "ap-southeast-1", "ap-southeast-2", "ap-south-1",
 }
 
-// RegionsWithPreferredFirst returns a region list with preferred (e.g. profile's region) first, then DefaultRegions without duplicate.
+// RegionsWithPreferredFirst returns a list starting with the preferred region (e.g. profile region), followed by deduplicated DefaultRegions.
 func RegionsWithPreferredFirst(preferred string) []string {
 	seen := make(map[string]bool)
 	var out []string
@@ -54,7 +54,7 @@ func profilesFromReader(r io.Reader) ([]string, error) {
 }
 
 // ProfilesFromConfig reads ~/.aws/config and returns profile names (including "default").
-// Recent profiles (from SaveRecentProfile) are placed first.
+// Recently used profiles (from SaveRecentProfile) are placed first.
 func ProfilesFromConfig() ([]string, error) {
 	home, _ := os.UserHomeDir()
 	path := filepath.Join(home, ".aws", "config")
@@ -108,7 +108,7 @@ func loadRecentProfiles() []string {
 	return profiles
 }
 
-// SaveRecentProfile records a profile as recently used, keeping the list short.
+// SaveRecentProfile records the recently used profile, keeping the list short.
 func SaveRecentProfile(profile string) {
 	recent := loadRecentProfiles()
 	var out []string

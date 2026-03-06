@@ -34,7 +34,7 @@ func (c *S3Client) ListBuckets(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-// ObjectItem for list display (prefix or key).
+// ObjectItem holds data for list display (prefix or key).
 type ObjectItem struct {
 	Key  string
 	Size int64
