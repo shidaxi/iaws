@@ -149,6 +149,7 @@ The active sort column is highlighted in the header, with ↑ (ascending) / ↓ 
 ## Usage
 
 ```bash
+./iaws --version        # or -v, prints version and exits
 ./iaws
 # 1) Select profile (e.g. default)
 # 2) Select region (e.g. us-east-1)
