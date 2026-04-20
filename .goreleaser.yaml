@@ -13,6 +13,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
 
 # 不打 tar 包，每个构建产物为单个二进制直接上传
 archives:
