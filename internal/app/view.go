@@ -51,6 +51,25 @@ func (m *model) loadingIndicator() string {
 }
 
 func (m *model) View() string {
+	base := m.renderBase()
+	if m.mfaPromptVisible {
+		return base + "\n" + m.renderMFAPrompt()
+	}
+	return base
+}
+
+func (m *model) renderMFAPrompt() string {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("212")).
+		Padding(0, 1)
+	label := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Render("MFA required")
+	body := fmt.Sprintf("%s  Enter MFA code: %s_", label, m.mfaInput)
+	hint := dimStyle.Render("Enter submit · Esc cancel · Backspace delete")
+	return style.Render(body + "\n" + hint)
+}
+
+func (m *model) renderBase() string {
 	switch m.kind {
 	case stateProfile:
 		return m.viewList("Select profile", m.filterSubtitle())

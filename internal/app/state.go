@@ -175,6 +175,13 @@ type Model struct {
 	// detail cache: keyed by entry.ID, stores formatted detail strings
 	detailMap map[string]string
 
+	// MFA prompt overlay: shown at the bottom of the screen when the AWS SDK
+	// requests an MFA code mid-request. Input is sent back to the SDK via
+	// mfaPrompter.Submit, unblocking the pending SDK call.
+	mfaPrompter       *mfaPrompter
+	mfaPromptVisible  bool
+	mfaInput          string
+
 	// service clients (created after AWS config loaded)
 	ec2       *services.EC2Client
 	ssm       *services.SSMClient
@@ -198,7 +205,15 @@ type model = Model
 
 // New creates a new Model with the given context.
 func New(ctx context.Context) *Model {
-	return &Model{ctx: ctx}
+	return &Model{ctx: ctx, mfaPrompter: newMFAPrompter()}
+}
+
+// AttachProgram wires the bubbletea program to the model's MFA prompter so
+// the SDK's TokenProvider callback can deliver messages into the TUI loop.
+func (m *Model) AttachProgram(prog *tea.Program) {
+	if m.mfaPrompter != nil {
+		m.mfaPrompter.SetProgram(prog)
+	}
 }
 
 func (m *model) ensureClients() {

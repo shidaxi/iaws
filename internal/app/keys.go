@@ -125,6 +125,78 @@ func (m *model) handleFilterModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// mfaMaxLen caps the MFA buffer. Virtual MFA codes are 6 digits; 10 leaves
+// room for longer hardware token codes without accepting paste garbage.
+const mfaMaxLen = 10
+
+// handleMFAKey handles key presses while the MFA input overlay is visible.
+// Digits append to the buffer, Backspace removes, Enter submits to the SDK
+// via mfaPrompter.Submit, Esc cancels the pending SDK call. Pasted input
+// (bracketed paste or any multi-rune KeyMsg) has its non-digit characters
+// stripped so users can copy codes straight from Authenticator apps or
+// password managers without worrying about trailing whitespace or newlines.
+func (m *model) handleMFAKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Paste messages carry Paste=true and typically multiple runes; Enter/Esc
+	// inside a paste should be treated as literal (ignored by the digit filter)
+	// rather than submitting the half-pasted buffer.
+	if msg.Paste || len(msg.Runes) > 1 {
+		m.appendMFADigits(msg.Runes)
+		return m, nil
+	}
+	switch msg.String() {
+	case "enter":
+		if m.mfaInput == "" {
+			return m, nil
+		}
+		code := m.mfaInput
+		m.mfaInput = ""
+		m.mfaPromptVisible = false
+		if m.mfaPrompter != nil {
+			m.mfaPrompter.Submit(code)
+		}
+		return m, nil
+	case "esc":
+		m.mfaInput = ""
+		m.mfaPromptVisible = false
+		if m.mfaPrompter != nil {
+			m.mfaPrompter.Cancel()
+		}
+		return m, nil
+	case "backspace":
+		if len(m.mfaInput) > 0 {
+			m.mfaInput = m.mfaInput[:len(m.mfaInput)-1]
+		}
+		return m, nil
+	}
+	if len(msg.Runes) == 1 {
+		r := msg.Runes[0]
+		if r == 8 || r == 127 {
+			if len(m.mfaInput) > 0 {
+				m.mfaInput = m.mfaInput[:len(m.mfaInput)-1]
+			}
+			return m, nil
+		}
+		if r >= '0' && r <= '9' && len(m.mfaInput) < mfaMaxLen {
+			m.mfaInput += string(r)
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+// appendMFADigits appends any digit runes from the given slice to mfaInput,
+// respecting the length cap. Used for bracketed paste or multi-rune bursts.
+func (m *model) appendMFADigits(runes []rune) {
+	for _, r := range runes {
+		if len(m.mfaInput) >= mfaMaxLen {
+			return
+		}
+		if r >= '0' && r <= '9' {
+			m.mfaInput += string(r)
+		}
+	}
+}
+
 // handlePopupKey handles key presses when a popup context menu is visible.
 func (m *model) handlePopupKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {

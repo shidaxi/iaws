@@ -4,8 +4,22 @@ An interactive AWS CLI built with Go — no need to compose long flags or comple
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
 ```bash
-git clone <repo>
+brew tap shidaxi/tap
+brew install iaws
+
+# or in one shot
+brew install shidaxi/tap/iaws
+```
+
+Upgrade later with `brew upgrade iaws`.
+
+### Build from source
+
+```bash
+git clone https://github.com/shidaxi/iaws.git
 cd iaws
 go mod tidy
 go build -o iaws .
@@ -128,7 +142,7 @@ The active sort column is highlighted in the header, with ↑ (ascending) / ↓ 
 ## Dependencies & Configuration
 
 - **AWS Credentials**: Uses `~/.aws/config` and `~/.aws/credentials`. On launch, select a **profile** (including default), then a **region**. All subsequent operations use that profile/region.
-- **Assume Role + MFA**: If the selected profile uses MFA (e.g. `role_arn` + `mfa_serial`), set the environment variable **`AWS_MFA_CODE`** to your current MFA code before running. Example: `AWS_MFA_CODE=123456 ./iaws`. **Credentials are cached in `~/.aws/cli/cache/`** (same directory as AWS CLI). Within the validity period, re-running iaws or SSM login does not require re-entering MFA.
+- **Assume Role + MFA**: If the selected profile uses MFA (e.g. `role_arn` + `mfa_serial`), iaws will **prompt interactively** at the bottom of the screen when an AWS API call first needs an MFA code — just type the code and press Enter. Alternatively, pre-set `AWS_MFA_CODE` before launch (`AWS_MFA_CODE=123456 ./iaws`) to skip the prompt. **Credentials are cached in `~/.aws/cli/cache/`** (same directory as AWS CLI), so within the validity period, re-running iaws or SSM login does not require re-entering MFA.
 - **Shared cache with AWS CLI / kubectl**: iaws stores assume-role cache in **`~/.aws/cli/cache/`** (filenames prefixed with `iaws_` to avoid conflicts with CLI). If valid cache from other tools exists in this directory, iaws will reuse it; cache written by iaws can also be shared with other tools. kubectl accesses EKS via `aws eks get-token` using the default AWS credential chain, sharing the same credentials and cache directory.
 - **SSM Login to EC2**: Requires [Session Manager Plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) installed locally, and instances must have SSM configured with appropriate IAM permissions. If you see **"Plugin with name Standard_Stream not found"**, this is typically a resource issue on the **EC2 instance side**: disk full, inotify exhausted, or file descriptor limits exceeded. Check `df -h` and `/proc/sys/fs/inotify/max_user_watches` on the instance; expand disk or increase `fs.inotify.max_user_watches` / `fs.file-max` then restart SSM Agent or the instance. Locally, update Session Manager Plugin to the latest version.
 
@@ -144,7 +158,7 @@ The active sort column is highlighted in the header, with ↑ (ascending) / ↓ 
 # 6) Destructive operations (e.g. Stop instance, Put Secret) require confirmation (y/n)
 ```
 
-With an MFA-protected profile:
+With an MFA-protected profile, you can either enter the MFA code interactively when iaws prompts, or pre-set it via environment variable:
 
 ```bash
 AWS_MFA_CODE=123456 ./iaws

@@ -39,7 +39,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			if m.mfaPromptVisible && m.mfaPrompter != nil {
+				m.mfaPrompter.Cancel()
+				m.mfaPromptVisible = false
+				m.mfaInput = ""
+			}
 			return m, tea.Quit
+		}
+		if m.mfaPromptVisible {
+			return m.handleMFAKey(msg)
 		}
 		if msg.String() == "q" && !m.filterMode && !m.popupVisible && m.kind != stateSecretPut && m.kind != stateS3PutObject {
 			return m, tea.Quit
@@ -135,6 +143,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.isMenuState() {
 			return m.handleMenuKey(msg)
 		}
+		return m, nil
+
+	case mfaRequestMsg:
+		m.mfaPromptVisible = true
+		m.mfaInput = ""
 		return m, nil
 
 	case searchTickMsg:
@@ -675,7 +688,7 @@ func (m *model) onMenuSelect(idx int) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		profile := m.items[idx].ID
-		return m.setLoading(loadAWSCmd(m.ctx, profile, ""))
+		return m.setLoading(loadAWSCmd(m.ctx, profile, "", m.mfaPrompter))
 	case stateMainMenu:
 		switch idx {
 		case 0:
@@ -804,7 +817,7 @@ func (m *model) onListSelect(entry listEntry) (tea.Model, tea.Cmd) {
 
 	switch m.kind {
 	case stateProfile:
-		return m.setLoading(loadAWSCmd(m.ctx, entry.ID, ""))
+		return m.setLoading(loadAWSCmd(m.ctx, entry.ID, "", m.mfaPrompter))
 	case stateRegion:
 		return m, func() tea.Msg { return regionSelectedMsg{region: entry.ID} }
 	case stateEC2InstanceList:
