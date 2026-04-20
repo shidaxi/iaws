@@ -15,6 +15,7 @@ func main() {
 	ctx := context.Background()
 	m := app.New(ctx)
 	p := tea.NewProgram(m, tea.WithAltScreen())
+	m.AttachProgram(p)
 	if _, err := p.Run(); err != nil {
 		ilog.Error("program exited with error: %v", err)
 		os.Exit(1)

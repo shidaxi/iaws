@@ -21,10 +21,14 @@ func loadProfilesCmd() tea.Cmd {
 	}
 }
 
-func loadAWSCmd(ctx context.Context, profile, region string) tea.Cmd {
+func loadAWSCmd(ctx context.Context, profile, region string, mfa *mfaPrompter) tea.Cmd {
 	return func() tea.Msg {
 		ilog.Info("cmd: loading AWS config profile=%q region=%q", profile, region)
-		aws, err := config.Load(ctx, config.LoadOptions{Profile: profile, Region: region})
+		opts := config.LoadOptions{Profile: profile, Region: region}
+		if mfa != nil {
+			opts.MFATokenProvider = mfa.Provide
+		}
+		aws, err := config.Load(ctx, opts)
 		if err != nil {
 			ilog.Error("cmd: load AWS config failed: %v", err)
 			return errMsg{err: err}

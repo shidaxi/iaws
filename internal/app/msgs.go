@@ -89,6 +89,11 @@ type searchTickMsg struct {
 
 type spinnerTickMsg struct{}
 
+// mfaRequestMsg is sent from the mfaPrompter (running on a tea.Cmd goroutine)
+// when the AWS SDK asks for an MFA code. The Update loop reacts by opening
+// an input overlay at the bottom of the screen.
+type mfaRequestMsg struct{}
+
 type volumeListLoadedMsg struct {
 	items   []listEntry
 	volumes []services.VolumeItem
